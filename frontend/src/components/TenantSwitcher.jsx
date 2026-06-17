@@ -1,0 +1,192 @@
+import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { ChevronDown, Plus, Building2, Check } from 'lucide-react';
+
+/**
+ * TenantSwitcher — Dropdown component for the Sidebar footer.
+ * Shows active tenant name, allows switching between tenants,
+ * and creating new workspaces.
+ */
+export const TenantSwitcher = () => {
+  const { activeTenant, allTenants, switchTenant, createTenant } = useAuth();
+  const { showToast } = useToast();
+
+  const [open, setOpen] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newTenantName, setNewTenantName] = useState('');
+  const [newTenantDomain, setNewTenantDomain] = useState('');
+  const [switching, setSwitching] = useState(false);
+
+  const handleSwitch = async (tenantId) => {
+    if (tenantId === activeTenant?.id) {
+      setOpen(false);
+      return;
+    }
+    setSwitching(true);
+    try {
+      await switchTenant(tenantId);
+      showToast('Workspace switched successfully.', 'success');
+      setOpen(false);
+      // Force reload to refresh all data contexts
+      window.location.reload();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!newTenantName.trim()) return;
+
+    try {
+      await createTenant(newTenantName, newTenantDomain);
+      showToast('Workspace created! Switching context...', 'success');
+      setShowCreateModal(false);
+      setNewTenantName('');
+      setNewTenantDomain('');
+      window.location.reload();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  if (!activeTenant) return null;
+
+  return (
+    <div style={{ position: 'relative' }}>
+      {/* Trigger Button */}
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: '0.6rem',
+          padding: '0.65rem 0.75rem', background: 'rgba(255, 255, 255, 0.04)',
+          border: '1px solid var(--border-color)', borderRadius: '10px',
+          cursor: 'pointer', color: 'var(--text-primary)',
+          fontFamily: 'var(--font-body)', fontSize: '0.82rem',
+          transition: 'all 0.2s ease'
+        }}
+      >
+        <Building2 size={14} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+        <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {activeTenant.name}
+        </span>
+        <ChevronDown
+          size={14}
+          style={{
+            color: 'var(--text-muted)', flexShrink: 0,
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.2s ease'
+          }}
+        />
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div style={{
+          position: 'absolute', bottom: '110%', left: 0, right: 0,
+          background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+          borderRadius: '12px', boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)',
+          overflow: 'hidden', zIndex: 200, animation: 'fadeIn 0.15s ease'
+        }}>
+          <div style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border-color)' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
+              Workspaces
+            </span>
+          </div>
+
+          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            {allTenants.map(t => (
+              <button
+                key={t.id}
+                onClick={() => handleSwitch(t.id)}
+                disabled={switching}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: '0.6rem',
+                  padding: '0.65rem 0.75rem', background: 'none', border: 'none',
+                  cursor: switching ? 'wait' : 'pointer',
+                  color: t.id === activeTenant.id ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                  fontFamily: 'var(--font-body)', fontSize: '0.82rem',
+                  textAlign: 'left', transition: 'background 0.15s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+              >
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {t.name}
+                </span>
+                {t.id === activeTenant.id && <Check size={14} style={{ color: 'var(--accent-success)' }} />}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ borderTop: '1px solid var(--border-color)', padding: '0.35rem' }}>
+            <button
+              onClick={() => { setShowCreateModal(true); setOpen(false); }}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: '0.5rem',
+                padding: '0.55rem 0.65rem', background: 'none', border: 'none',
+                cursor: 'pointer', color: 'var(--accent-primary)',
+                fontFamily: 'var(--font-body)', fontSize: '0.82rem',
+                borderRadius: '8px', transition: 'background 0.15s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(59,130,246,0.08)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+            >
+              <Plus size={14} /> Create New Workspace
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Create Modal */}
+      {showCreateModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="glass-card" style={{ width: '440px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1.25rem' }}>
+              Create New Workspace
+            </h3>
+            <form onSubmit={handleCreate}>
+              <div className="form-group">
+                <label className="form-label">Workspace Name *</label>
+                <input
+                  type="text" className="form-input"
+                  placeholder="My New Business"
+                  value={newTenantName}
+                  onChange={(e) => setNewTenantName(e.target.value)}
+                  required autoFocus
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Domain (optional)</label>
+                <input
+                  type="text" className="form-input"
+                  placeholder="mybusiness.com"
+                  value={newTenantDomain}
+                  onChange={(e) => setNewTenantDomain(e.target.value)}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  <Plus size={15} /> Create
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default TenantSwitcher;
