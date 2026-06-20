@@ -52,9 +52,11 @@ export const Team = () => {
     }
   };
 
+  const joinUrl = lastInvite ? `${window.location.origin}/join?token=${lastInvite.inviteToken}` : '';
+
   const copyInvite = async () => {
-    if (!lastInvite?.joinUrl) return;
-    await navigator.clipboard.writeText(lastInvite.joinUrl);
+    if (!joinUrl) return;
+    await navigator.clipboard.writeText(joinUrl);
     showToast('Invite link copied.', 'success');
   };
 
@@ -106,13 +108,13 @@ export const Team = () => {
               </button>
             </form>
 
-            {lastInvite?.joinUrl && (
+            {joinUrl && (
               <div className="info-alert" style={{ marginTop: '1.5rem', marginBottom: 0 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p className="info-alert-text" style={{ marginBottom: '0.5rem' }}>
                     Invite link for {lastInvite.meta?.email}
                   </p>
-                  <input className="form-input" value={lastInvite.joinUrl} readOnly />
+                  <input className="form-input" value={joinUrl} readOnly />
                 </div>
                 <button className="btn btn-secondary" type="button" onClick={copyInvite} title="Copy invite link" style={{ padding: '0 0.75rem', height: '40px', marginTop: '1.75rem' }}>
                   <Copy size={16} />
