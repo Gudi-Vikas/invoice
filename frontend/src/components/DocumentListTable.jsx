@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Check, Copy, ShieldCheck, Download } from 'lucide-react';
 import api from '../api';
@@ -11,6 +11,9 @@ const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPay
   const [searchParams] = useSearchParams();
   const clientId = searchParams.get('client');
   
+  const requestCache = useRef(new Map());
+  
+  const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState([]);
   const [stats, setStats] = useState({});
   const [clients, setClients] = useState([]);
@@ -24,13 +27,18 @@ const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPay
 
   const currencySymbol = settings?.tax_config?.currencySymbol || '₹';
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceRefresh = false) => {
+    setLoading(true);
     try {
       const statsParams = { type: defaultType };
       if (clientId) statsParams.clientId = clientId;
       
-      const statsData = await api.getDocumentStats(statsParams);
-      setStats(statsData || {});
+      const statsKey = `stats_${JSON.stringify(statsParams)}`;
+      if (!requestCache.current.has(statsKey) || forceRefresh === true) {
+        const statsData = await api.getDocumentStats(statsParams);
+        requestCache.current.set(statsKey, statsData || {});
+      }
+      setStats(requestCache.current.get(statsKey));
       
       const params = { page, limit: 10, type: defaultType };
       if (clientId) params.clientId = clientId;
@@ -42,12 +50,20 @@ const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPay
         params.dateFrom = new Date(date.getFullYear(), date.getMonth(), 1).toISOString();
       }
       
-      const data = await api.getDocuments(params);
+      const docsKey = `docs_${JSON.stringify(params)}`;
+      if (!requestCache.current.has(docsKey) || forceRefresh === true) {
+        const data = await api.getDocuments(params);
+        requestCache.current.set(docsKey, data);
+      }
+      
+      const data = requestCache.current.get(docsKey);
       setDocuments(data.documents || []);
       setTotalPages(data.totalPages || 1);
       setTotalCount(data.totalCount || 0);
     } catch (err) {
       showToast('Failed to load documents: ' + err.message, 'error');
+    } finally {
+      setLoading(false);
     }
   }, [page, filterStatus, filterDate, defaultType, clientId, showToast]);
 
@@ -116,7 +132,7 @@ const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPay
             <option value="paid">Paid</option>
             <option value="overdue">Overdue</option>
           </select>
-          <button className="btn btn-secondary" style={{ padding: '0.3rem 1rem', fontSize: '0.85rem' }} onClick={() => loadData()}>
+          <button className="btn btn-secondary" style={{ padding: '0.3rem 1rem', fontSize: '0.85rem' }} onClick={() => loadData(true)}>
             Filter
           </button>
         </div>
@@ -139,7 +155,9 @@ const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPay
       {/* Table */}
       <div className="glass-card" style={{ padding: 0 }}>
         <div className="table-container" style={{ margin: 0 }}>
-          {documents.length === 0 ? (
+          {loading ? (
+            <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '3rem' }}>Loading {defaultType}s...</p>
+          ) : documents.length === 0 ? (
             <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '3rem' }}>No {defaultType}s found.</p>
           ) : (
             <table className="data-table">
