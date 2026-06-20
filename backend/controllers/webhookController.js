@@ -2,6 +2,7 @@ import { runInTransaction } from '../config/db.js';
 import pool from '../config/db.js';
 import razorpayService from '../services/razorpayService.js';
 import { postLedgerTransaction, postPaymentLedger } from '../services/ledgerService.js';
+import { createPlatformInvoice } from './platformBillingController.js';
 
 /**
  * Controller processing asynchronous status updates from Razorpay Webhook streams.
@@ -57,17 +58,50 @@ export const webhookController = {
           await runInTransaction(null, async (client) => {
             // Find invoice across all tenants matching this order
             const docRes = await client.query(
-              'SELECT id, tenant_id, document_number, total_due FROM documents WHERE razorpay_order_id = $1',
+              'SELECT id, tenant_id, document_number, total_due, status, convenience_fee_amount, convenience_fee_tax_amount, sub_total, tax_amount FROM documents WHERE razorpay_order_id = $1',
               [rzpOrderId]
             );
 
             if (docRes.rows.length === 0) {
-              console.warn(`[Webhook Controller] Invoice document with order ID ${rzpOrderId} not found.`);
+              const platRes = await client.query(
+                'SELECT id, tenant_id, invoice_number, status FROM platform_billing_invoices WHERE razorpay_order_id = $1',
+                [rzpOrderId]
+              );
+              if (platRes.rows.length === 0) {
+                console.warn(`[Webhook Controller] Invoice document or platform invoice with order ID ${rzpOrderId} not found.`);
+                return;
+              }
+              const platInvoice = platRes.rows[0];
+              if (platInvoice.status === 'paid') {
+                console.log(`[Webhook Controller] Platform invoice ${platInvoice.invoice_number} is already paid.`);
+                return;
+              }
+              await client.query(
+                `UPDATE platform_billing_invoices SET status = 'paid', paid_at = NOW(), razorpay_payment_id = $1 WHERE id = $2`,
+                [rzpPaymentId, platInvoice.id]
+              );
+              const tenantRes = await client.query(
+                `SELECT status FROM tenants WHERE id = $1`,
+                [platInvoice.tenant_id]
+              );
+              if (tenantRes.rows.length > 0 && tenantRes.rows[0].status === 'suspended') {
+                await client.query(
+                  `UPDATE tenants SET status = 'active' WHERE id = $1`,
+                  [platInvoice.tenant_id]
+                );
+                console.log(`[Webhook Controller] Activated suspended tenant workspace: ${platInvoice.tenant_id}`);
+              }
+              console.log(`[Webhook Controller] Platform billing invoice ${platInvoice.invoice_number} marked paid via webhook.`);
               return;
             }
 
             const doc = docRes.rows[0];
             const tenantId = doc.tenant_id;
+
+            if (doc.status === 'paid') {
+              console.log(`[Webhook Controller] Invoice ${doc.document_number} is already paid. Skipping double-billing / ledger entries.`);
+              return;
+            }
 
             // Set RLS context for the transaction explicitly
             await client.query(`SELECT set_config('app.current_tenant_id', $1, true)`, [tenantId]);
@@ -81,7 +115,17 @@ export const webhookController = {
             );
 
             // Post payment ledger entries
-            await postPaymentLedger(client, tenantId, doc.document_number, totalPaidRupees, gatewayFeeRupees);
+            await postPaymentLedger(
+              client, 
+              tenantId, 
+              doc.document_number, 
+              totalPaidRupees, 
+              gatewayFeeRupees, 
+              doc.id,
+              parseFloat(doc.convenience_fee_amount || 0),
+              parseFloat(doc.convenience_fee_tax_amount || 0),
+              parseFloat(doc.total_due)
+            );
             console.log(`[Webhook Controller] Paid status and double-entry ledger updated for Invoice: ${doc.document_number}`);
           });
           break;
@@ -172,7 +216,7 @@ export const webhookController = {
             // Resolve tenant_id from the subscription record (cross-tenant lookup —
             // no RLS context set yet, relies on DB owner role for the initial SELECT)
             const subLookup = await client.query(
-              `SELECT tenant_id FROM subscriptions WHERE external_subscription_id = $1`,
+              `SELECT tenant_id, plan_id FROM subscriptions WHERE external_subscription_id = $1`,
               [rzpSubId]
             );
 
@@ -181,7 +225,7 @@ export const webhookController = {
               return;
             }
 
-            const tenantId = subLookup.rows[0].tenant_id;
+            const { tenant_id: tenantId, plan_id: planId } = subLookup.rows[0];
 
             // Set RLS context so the UPDATE passes RLS policy checks
             await client.query(
@@ -195,7 +239,80 @@ export const webhookController = {
                WHERE external_subscription_id = $2`,
               [nextPeriodDate, rzpSubId]
             );
+
+            // Fetch plan details to log matching pricing
+            const planRes = await client.query('SELECT price_monthly FROM plans WHERE id = $1', [planId]);
+            const planPrice = planRes.rows[0]?.price_monthly || 999.00;
+
+            const rzpPaymentId = payload.payment?.entity?.id || null;
+            const rzpOrderId = payload.payment?.entity?.order_id || null;
+
+            // Create paid platform invoice record for master admin visibility
+            await createPlatformInvoice(client, {
+              tenantId,
+              planId,
+              amount: planPrice,
+              razorpayOrderId: rzpOrderId,
+              razorpayPaymentId: rzpPaymentId,
+              status: 'paid'
+            });
+
             console.log(`[Webhook Controller] Subscription ${rzpSubId} successfully renewed.`);
+          });
+          break;
+        }
+
+        case 'account.updated': {
+          const accountEntity = payload.account.entity;
+          const rzpAccountId = accountEntity.id;
+          const status = accountEntity.status; // active, suspended, created
+          const kycStatus = accountEntity.kyc?.status; // verified, under_review, failed
+
+          await runInTransaction(null, async (client) => {
+            // Locate the matching linked account to resolve tenant ID & vendor ID
+            const laRes = await client.query(
+              `SELECT id, tenant_id, vendor_id FROM linked_accounts WHERE razorpay_account_id = $1`,
+              [rzpAccountId]
+            );
+
+            if (laRes.rows.length === 0) {
+              console.warn(`[Webhook Controller] Linked account mapping not found for Razorpay Account: ${rzpAccountId}`);
+              return;
+            }
+
+            const { id: linkedAccountId, tenant_id: tenantId, vendor_id: vendorId } = laRes.rows[0];
+
+            // Set RLS Context
+            await client.query(`SELECT set_config('app.current_tenant_id', $1, true)`, [tenantId]);
+
+            // Update linked account status
+            let localLaStatus = 'created';
+            if (status === 'active') localLaStatus = 'active';
+            else if (status === 'suspended') localLaStatus = 'suspended';
+
+            await client.query(
+              `UPDATE linked_accounts SET status = $1 WHERE id = $2`,
+              [localLaStatus, linkedAccountId]
+            );
+
+            // Update vendor KYC status
+            let localKycStatus = 'uninitiated';
+            if (status === 'active' || kycStatus === 'verified') {
+              localKycStatus = 'active';
+            } else if (kycStatus === 'under_review') {
+              localKycStatus = 'under_review';
+            } else if (kycStatus === 'failed') {
+              localKycStatus = 'needs_clarification';
+            } else {
+              localKycStatus = status === 'active' ? 'active' : 'under_review';
+            }
+
+            await client.query(
+              `UPDATE vendors SET kyc_status = $1 WHERE id = $2`,
+              [localKycStatus, vendorId]
+            );
+
+            console.log(`[Webhook Controller] Updated Vendor ${vendorId} KYC status to '${localKycStatus}' and Linked Account ${rzpAccountId} to '${localLaStatus}'`);
           });
           break;
         }

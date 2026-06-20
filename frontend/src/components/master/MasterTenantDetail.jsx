@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { useToast } from '../../context/ToastContext';
 import {
-  ArrowLeft, Users, CreditCard, Receipt, ShieldAlert,
-  Power, PowerOff, Trash2, Save
+  ArrowLeft, CreditCard, Receipt, ShieldAlert,
+  Power, PowerOff, Trash2, Save, Users
 } from 'lucide-react';
 
 /**
@@ -16,23 +17,48 @@ export const MasterTenantDetail = () => {
   const { showToast } = useToast();
 
   const [data, setData] = useState(null);
+  const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [subOverride, setSubOverride] = useState({ planId: '', status: '', currentPeriodEnd: '' });
 
-  useEffect(() => { loadTenant(); }, [id]);
+  // Billing generation and user invitation state
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [generateData, setGenerateData] = useState({
+    billingPeriodStart: '',
+    billingPeriodEnd: '',
+    dueDate: '',
+    amountOverride: '',
+    notes: ''
+  });
 
-  const loadTenant = async () => {
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('member');
+  const [inviteLink, setInviteLink] = useState('');
+
+  const loadPlans = useCallback(async () => {
+    try {
+      const planData = await api.getPlans();
+      setPlans(planData || []);
+    } catch {
+      showToast('Failed to load subscription plans.', 'error');
+    }
+  }, [showToast]);
+
+  const loadTenant = useCallback(async () => {
     try {
       const result = await api.masterGetTenant(id);
       setData(result);
-    } catch (err) {
+    } catch {
       showToast('Failed to load tenant details.', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, showToast]);
+
+  useEffect(() => { loadTenant(); loadPlans(); }, [loadTenant, loadPlans]);
 
   const handleSuspend = async () => {
     try {
@@ -72,6 +98,48 @@ export const MasterTenantDetail = () => {
     } catch (err) { showToast(err.message, 'error'); }
   };
 
+  const handleGenerateInvoice = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        tenantId: id,
+        billingPeriodStart: generateData.billingPeriodStart,
+        billingPeriodEnd: generateData.billingPeriodEnd,
+        dueDate: generateData.dueDate,
+        notes: generateData.notes || undefined
+      };
+      if (generateData.amountOverride) {
+        payload.amountOverride = parseFloat(generateData.amountOverride);
+      }
+
+      await api.masterGenerateBilling(payload);
+      showToast('Billing invoice generated successfully.', 'success');
+      setShowGenerateModal(false);
+      setGenerateData({
+        billingPeriodStart: '',
+        billingPeriodEnd: '',
+        dueDate: '',
+        amountOverride: '',
+        notes: ''
+      });
+      loadTenant();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleInviteUser = async (e) => {
+    e.preventDefault();
+    try {
+      const result = await api.invite({ email: inviteEmail, role: inviteRole }, id);
+      setInviteLink(result.joinUrl);
+      showToast('Invitation generated successfully.', 'success');
+      loadTenant();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   if (loading || !data) {
     return (
       <div className="fade-in">
@@ -103,7 +171,7 @@ export const MasterTenantDetail = () => {
         <div>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 800 }}>{tenant.name}</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            {tenant.domain || 'No domain'} · ID: {tenant.id?.slice(0, 8)}...
+            {tenant.domain || 'No domain'} · ID: {tenant.id}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -171,6 +239,17 @@ export const MasterTenantDetail = () => {
 
       {activeTab === 'users' && (
         <div className="glass-card" style={{ padding: '0' }}>
+          <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3><Users size={16} style={{ verticalAlign: 'middle', marginRight: '0.4rem' }} /> Users</h3>
+            <button className="btn btn-primary" onClick={() => {
+              setInviteEmail('');
+              setInviteRole('member');
+              setInviteLink('');
+              setShowInviteModal(true);
+            }} style={{ fontSize: '0.82rem' }}>
+              Invite User
+            </button>
+          </div>
           <table className="data-table">
             <thead>
               <tr><th>Email</th><th>Role</th><th>Joined</th></tr>
@@ -196,9 +275,16 @@ export const MasterTenantDetail = () => {
             <form onSubmit={handleSubOverride}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Plan ID</label>
-                  <input type="text" className="form-input" placeholder="Plan UUID"
-                    value={subOverride.planId} onChange={e => setSubOverride(p => ({ ...p, planId: e.target.value }))} />
+                  <label className="form-label">Plan</label>
+                  <select className="form-select"
+                    value={subOverride.planId} onChange={e => setSubOverride(p => ({ ...p, planId: e.target.value }))}>
+                    <option value="">No change</option>
+                    {plans.map((plan) => (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.name} - ₹{parseFloat(plan.price_monthly || 0).toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Status</label>
@@ -249,7 +335,10 @@ export const MasterTenantDetail = () => {
       {activeTab === 'billing' && (
         <div className="glass-card" style={{ padding: '0' }}>
           <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3><Receipt size={16} style={{ verticalAlign: 'middle' }} /> Billing Invoices</h3>
+            <h3><Receipt size={16} style={{ verticalAlign: 'middle', marginRight: '0.4rem' }} /> Billing Invoices</h3>
+            <button className="btn btn-primary" onClick={() => setShowGenerateModal(true)} style={{ fontSize: '0.82rem' }}>
+              Generate Invoice
+            </button>
           </div>
           {recentBillingInvoices.length === 0 ? (
             <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No billing invoices for this tenant.</p>
@@ -273,13 +362,136 @@ export const MasterTenantDetail = () => {
         </div>
       )}
 
+      {/* Generate Invoice Modal */}
+      {showGenerateModal && (
+        <div className="modal-overlay">
+          <div className="glass-card modal-card" style={{ '--modal-width': '480px' }}>
+            <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Receipt size={18} style={{ color: 'var(--accent-primary)' }} />
+              Generate Platform Invoice
+            </h3>
+            <form onSubmit={handleGenerateInvoice}>
+              <div className="form-group">
+                <label className="form-label">Billing Period Start</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={generateData.billingPeriodStart}
+                  onChange={e => setGenerateData(prev => ({ ...prev, billingPeriodStart: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Billing Period End</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={generateData.billingPeriodEnd}
+                  onChange={e => setGenerateData(prev => ({ ...prev, billingPeriodEnd: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Due Date</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={generateData.dueDate}
+                  onChange={e => setGenerateData(prev => ({ ...prev, dueDate: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Amount Override (INR, pre-tax, optional)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="e.g. 999.00"
+                  className="form-input"
+                  value={generateData.amountOverride}
+                  onChange={e => setGenerateData(prev => ({ ...prev, amountOverride: e.target.value }))}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Notes (optional)</label>
+                <textarea
+                  className="form-input"
+                  placeholder="Additional invoice notes"
+                  value={generateData.notes || ''}
+                  onChange={e => setGenerateData(prev => ({ ...prev, notes: e.target.value }))}
+                  style={{ minHeight: '60px' }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowGenerateModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Generate</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Invite User Modal */}
+      {showInviteModal && (
+        <div className="modal-overlay">
+          <div className="glass-card modal-card" style={{ '--modal-width': '440px' }}>
+            <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Users size={18} style={{ color: 'var(--accent-primary)' }} />
+              Invite User to Tenant
+            </h3>
+            <form onSubmit={handleInviteUser}>
+              <div className="form-group">
+                <label className="form-label">User Email</label>
+                <input
+                  type="email"
+                  className="form-input"
+                  placeholder="user@example.com"
+                  value={inviteEmail}
+                  onChange={e => setInviteEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Workspace Role</label>
+                <select
+                  className="form-select"
+                  value={inviteRole}
+                  onChange={e => setInviteRole(e.target.value)}
+                >
+                  <option value="member">Member</option>
+                  <option value="billing">Billing</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              
+              {inviteLink && (
+                <div className="info-alert" style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <span className="info-alert-text">Invite link generated:</span>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input className="form-input" value={inviteLink} readOnly style={{ margin: 0 }} />
+                    <button type="button" className="btn btn-secondary" onClick={async () => {
+                      await navigator.clipboard.writeText(inviteLink);
+                      showToast('Invite link copied.', 'success');
+                    }} style={{ padding: '0 0.75rem', height: '40px' }}>
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowInviteModal(false)}>Close</button>
+                <button type="submit" className="btn btn-primary" disabled={!!inviteLink}>Invite</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Delete Modal */}
       {showDeleteModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-          <div className="glass-card" style={{ width: '440px' }}>
+        <div className="modal-overlay">
+          <div className="glass-card modal-card" style={{ '--modal-width': '440px' }}>
             <h3 style={{ color: 'var(--accent-danger)', marginBottom: '1rem' }}>
               <ShieldAlert size={18} style={{ verticalAlign: 'middle' }} /> Permanently Delete Tenant
             </h3>

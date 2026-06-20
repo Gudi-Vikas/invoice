@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
-import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
 import {
   Users, UserPlus, FileText, Edit2, X, Check, Search, ChevronLeft, ChevronRight,
-  Building2, Mail, MapPin, ArrowUpRight, Trash2
+  Mail, MapPin
 } from 'lucide-react';
 
 /**
@@ -13,7 +13,6 @@ import {
  * Full CRUD for client contacts: list with search + pagination, add modal, edit panel.
  */
 export const Clients = () => {
-  const { settings } = useSettings();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [clients, setClients] = useState([]);
@@ -59,7 +58,7 @@ export const Clients = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch]);
+  }, [page, debouncedSearch, showToast]);
 
   useEffect(() => {
     loadClients();
@@ -124,8 +123,6 @@ export const Clients = () => {
       showFeedback('error', 'Failed to update client: ' + err.message);
     }
   };
-
-  const currencySymbol = settings?.tax_config?.currencySymbol || '₹';
 
   return (
     <div className="fade-in">
@@ -255,10 +252,18 @@ export const Clients = () => {
                         <button
                           className="btn btn-secondary"
                           style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}
-                          onClick={() => navigate('/documents/create')}
-                          title="New invoice for this client"
+                          onClick={() => navigate(`/invoices?client=${client.id}`)}
+                          title="View invoices for this client"
                         >
-                          <FileText size={13} /> Invoice
+                          <FileText size={13} /> Invoices
+                        </button>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}
+                          onClick={() => navigate(`/quotes?client=${client.id}`)}
+                          title="View quotations for this client"
+                        >
+                          <FileText size={13} /> Quotations
                         </button>
                       </div>
                     </td>
@@ -301,12 +306,8 @@ export const Clients = () => {
 
       {/* ==================== ADD CLIENT MODAL ==================== */}
       {showAddModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', zIndex: 1000
-        }}>
-          <div className="glass-card" style={{ width: '520px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="modal-overlay">
+          <div className="glass-card modal-card" style={{ '--modal-width': '520px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Register New Client</h3>
               <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => setShowAddModal(false)}>
@@ -386,12 +387,8 @@ export const Clients = () => {
 
       {/* ==================== EDIT CLIENT PANEL ==================== */}
       {editingClient && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', zIndex: 1000
-        }}>
-          <div className="glass-card" style={{ width: '520px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="modal-overlay">
+          <div className="glass-card modal-card" style={{ '--modal-width': '520px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <div>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Edit Client</h3>

@@ -13,8 +13,13 @@ import portalRoutes from './routes/portal.js';
 import webhookRoutes from './routes/webhooks.js';
 import subscriptionRoutes from './routes/subscriptions.js';
 import masterRoutes from './routes/master.js';
+import paymentRoutes from './routes/payments.js';
 
 dotenv.config();
+
+if (!process.env.JWT_SECRET) {
+  throw new Error("FATAL: JWT_SECRET environment variable is missing.");
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -49,12 +54,18 @@ app.use('/api/v1/vendors', vendorRoutes);
 app.use('/api/v1/portal', portalRoutes);
 app.use('/api/v1/subscriptions', subscriptionRoutes);
 app.use('/api/v1/master', masterRoutes);  // Platform Owner Control Plane
+app.use('/api/v1/payments', paymentRoutes);
 
 // Webhook listener endpoints
 app.use('/api/webhooks', webhookRoutes);
 
 // Mount global error handler (must be placed at the end of the middleware stack)
 app.use(errorHandler);
+
+app.get("/", (req, res) => {
+  res.send("Backend running");
+});
+
 
 app.listen(PORT, () => {
   console.log(`[Invoice SaaS Server] Server running on port ${PORT}`);

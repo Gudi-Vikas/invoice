@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useRef, useCallback } from 'react';
 import api from '../api';
 import { Save, AlertCircle, Eye, Code, Upload } from 'lucide-react';
 import { sanitizeHtmlContent } from '../utils/sanitize';
@@ -13,7 +14,9 @@ export const Settings = () => {
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [logoUploading, setLogoUploading] = useState(false);
   const [feedback, setFeedback] = useState({ type: '', message: '' });
+  const logoInputRef = useRef(null);
 
   // Emails active template key selector
   const [activeEmailKey, setActiveEmailKey] = useState('');
@@ -22,27 +25,7 @@ export const Settings = () => {
   const [rawLineItemsText, setRawLineItemsText] = useState('');
   const [parsedLineItems, setParsedLineItems] = useState([]);
 
-  useEffect(() => {
-    if (ctxSettings) {
-      setSettings(ctxSettings);
-      setLoading(false);
-      if (ctxSettings.general_config?.predefinedLineItems) {
-        const pipeString = ctxSettings.general_config.predefinedLineItems
-          .map(item => `${item.qty} | ${item.title} | ${item.price} | ${item.description}`)
-          .join('\n');
-        setRawLineItemsText(pipeString);
-        setParsedLineItems(ctxSettings.general_config.predefinedLineItems);
-      }
-      if (ctxSettings.email_templates) {
-        const firstKey = Object.keys(ctxSettings.email_templates)[0];
-        setActiveEmailKey(firstKey || '');
-      }
-    } else {
-      fetchSettings();
-    }
-  }, [ctxSettings]);
-
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       const data = await api.getSettings();
       // Ensure payments_config is always present (safe guard for older stored configs)
@@ -66,7 +49,47 @@ export const Settings = () => {
       console.error('Failed to load settings:', err);
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (ctxSettings) {
+      setSettings(ctxSettings);
+      setLoading(false);
+      if (ctxSettings.general_config?.predefinedLineItems) {
+        const pipeString = ctxSettings.general_config.predefinedLineItems
+          .map(item => `${item.qty} | ${item.title} | ${item.price} | ${item.description}`)
+          .join('\n');
+        setRawLineItemsText(pipeString);
+        setParsedLineItems(ctxSettings.general_config.predefinedLineItems);
+      }
+      if (ctxSettings.email_templates) {
+        const firstKey = Object.keys(ctxSettings.email_templates)[0];
+        setActiveEmailKey(firstKey || '');
+      }
+    } else {
+      fetchSettings();
+    }
+  }, [ctxSettings, fetchSettings]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    const oauthParam = params.get('oauth');
+    const messageParam = params.get('message');
+
+    if (tabParam) {
+      setActiveTab(tabParam);
+    }
+
+    if (oauthParam === 'success') {
+      setFeedback({ type: 'success', message: 'Razorpay account connected successfully via OAuth!' });
+      window.history.replaceState({}, document.title, window.location.pathname + '?tab=payments');
+      fetchSettings();
+    } else if (oauthParam === 'error') {
+      setFeedback({ type: 'error', message: `Razorpay connection failed: ${messageParam || 'Unknown error'}` });
+      window.history.replaceState({}, document.title, window.location.pathname + '?tab=payments');
+    }
+  }, [fetchSettings]);
 
 
   // Real-time Pipe Delimited String Parser
@@ -110,7 +133,11 @@ export const Settings = () => {
           predefinedLineItems: parsedLineItems
         };
       } else {
-        payload = settings[`${category}_config`] || settings[category] || {};
+        let key = `${category}_config`;
+        if (category === 'business') key = 'business_info';
+        if (category === 'email') key = 'email_templates';
+        if (category === 'translations') key = 'translations';
+        payload = settings[key] || settings[category] || {};
       }
 
       await api.updateSettings(category, payload);
@@ -143,6 +170,52 @@ export const Settings = () => {
         }
       }
     }));
+  };
+
+  const handleLogoFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setLogoUploading(true);
+    setFeedback({ type: '', message: '' });
+
+    try {
+      const data = await api.uploadLogo(file);
+      updateSettingState('business_info', 'logoUrl', data.logoUrl);
+      setFeedback({ type: 'success', message: 'Logo uploaded successfully.' });
+      refreshSettings();
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to upload logo.' });
+    } finally {
+      setLogoUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleConnectRazorpay = async () => {
+    setFeedback({ type: '', message: '' });
+    try {
+      const { authorizeUrl } = await api.getTenantOAuthUrl();
+      if (authorizeUrl) {
+        window.location.href = authorizeUrl;
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to initialize Razorpay OAuth.' });
+    }
+  };
+
+  const handleDisconnectRazorpay = async () => {
+    setFeedback({ type: '', message: '' });
+    if (!window.confirm('Are you sure you want to disconnect your Razorpay integration? Client online checkout payments will be disabled.')) {
+      return;
+    }
+    try {
+      await api.disconnectTenantRazorpay();
+      setFeedback({ type: 'success', message: 'Razorpay connected account successfully disconnected.' });
+      fetchSettings();
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to disconnect Razorpay.' });
+    }
   };
 
   if (loading) {
@@ -291,18 +364,36 @@ export const Settings = () => {
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
               <div className="form-group">
-                <label className="form-label">Business Logo URL</label>
+                <label className="form-label">Business Logo</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <input 
                     type="text" 
                     className="form-input" 
+                    placeholder="Paste an image URL or upload a file"
                     value={settings.business_info.logoUrl}
                     onChange={(e) => updateSettingState('business_info', 'logoUrl', e.target.value)}
                   />
-                  <button className="btn btn-secondary" style={{ padding: '0.5rem 1rem' }} onClick={() => updateSettingState('business_info', 'logoUrl', 'https://ultrakeyit.com/wp-content/uploads/2024/logo.png')}>
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoFileChange}
+                    style={{ display: 'none' }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '0.5rem 1rem', minWidth: '46px' }}
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={logoUploading}
+                    title="Upload logo from your files"
+                  >
                     <Upload size={16} />
                   </button>
                 </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Upload PNG, JPG, SVG, or WebP up to 2 MB, or paste a hosted logo URL.
+                </span>
                 {settings.business_info.logoUrl && (
                   <div style={{ marginTop: '0.75rem', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', display: 'inline-block' }}>
                     <img src={settings.business_info.logoUrl} alt="Logo Preview" style={{ maxHeight: '45px', display: 'block' }} onError={(e) => e.target.style.display = 'none'} />
@@ -375,7 +466,7 @@ export const Settings = () => {
               </h5>
               <div 
                 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}
-                dangerouslySetInnerHTML={{ __html: settings.business_info.extraInfo || '<i>No extra details supplied.</i>' }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(settings.business_info.extraInfo || '<i>No extra details supplied.</i>') }}
               />
             </div>
 
@@ -645,26 +736,98 @@ export const Settings = () => {
               </div>
             </div>
 
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div className="form-group">
+                <label className="form-label">GPay / PhonePe Number</label>
+                <input 
+                  type="text" 
+                  className="form-input"
+                  value={settings.payments_config?.gpayNumber || ''}
+                  onChange={e => updateSettingState('payments_config', 'gpayNumber', e.target.value)}
+                  placeholder="e.g. 6300440316" 
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Bank Name</label>
+                <input 
+                  type="text" 
+                  className="form-input"
+                  value={settings.payments_config?.bankName || ''}
+                  onChange={e => updateSettingState('payments_config', 'bankName', e.target.value)}
+                  placeholder="e.g. HDFC Bank" 
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div className="form-group">
+                <label className="form-label">Bank Account Number</label>
+                <input 
+                  type="text" 
+                  className="form-input"
+                  value={settings.payments_config?.bankAccountNumber || ''}
+                  onChange={e => updateSettingState('payments_config', 'bankAccountNumber', e.target.value)}
+                  placeholder="e.g. 50200092611852" 
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Bank Account Name</label>
+                <input 
+                  type="text" 
+                  className="form-input"
+                  value={settings.payments_config?.bankAccountName || ''}
+                  onChange={e => updateSettingState('payments_config', 'bankAccountName', e.target.value)}
+                  placeholder="e.g. Ultrakey IT Solutions Pvt. Ltd." 
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div className="form-group">
+                <label className="form-label">IFSC Code</label>
+                <input 
+                  type="text" 
+                  className="form-input"
+                  value={settings.payments_config?.bankIfsc || ''}
+                  onChange={e => updateSettingState('payments_config', 'bankIfsc', e.target.value)}
+                  placeholder="e.g. HDFC0000968" 
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Branch Name</label>
+                <input 
+                  type="text" 
+                  className="form-input"
+                  value={settings.payments_config?.bankBranch || ''}
+                  onChange={e => updateSettingState('payments_config', 'bankBranch', e.target.value)}
+                  placeholder="e.g. GACHIBOWLI" 
+                />
+              </div>
+            </div>
+
             <div className="form-group">
-              <label className="form-label">Bank / Payment Instructions (shown on invoices)</label>
+              <label className="form-label">Additional Payment Instructions (shown on invoices)</label>
               <textarea
                 className="form-textarea"
                 value={settings.payments_config?.bankDetails || ''}
                 onChange={e => updateSettingState('payments_config', 'bankDetails', e.target.value)}
-                placeholder="Beneficiary Bank name, IFSC code, Account number"
-                style={{ height: '100px' }}
+                placeholder="Any other terms or instructions..."
+                style={{ height: '80px' }}
               />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
               <div className="form-group">
-                <label className="form-label">Razorpay Key ID</label>
-                <input type="text" className="form-input"
-                  value={settings.payments_config?.razorpayKeyId || ''}
-                  onChange={e => updateSettingState('payments_config', 'razorpayKeyId', e.target.value)}
-                  placeholder="rzp_live_XXXXXXXXXXXXXXXX" />
+                <label className="form-label">UPI ID (for dynamic QR code generation)</label>
+                <input 
+                  type="text" 
+                  className="form-input"
+                  value={settings.payments_config?.upiId || ''}
+                  onChange={e => updateSettingState('payments_config', 'upiId', e.target.value)}
+                  placeholder="e.g. business@okaxis" 
+                />
                 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  Only the Key ID is stored here. Secret is managed via server .env file.
+                  Enter your business UPI VPA. It will generate a dynamic QR Code at checkout.
                 </span>
               </div>
               <div className="form-group">
@@ -676,6 +839,55 @@ export const Settings = () => {
                   <option value="right">Right (1,000₹)</option>
                 </select>
               </div>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '1.5rem', background: 'rgba(255,255,255,0.02)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+              <label className="form-label" style={{ fontSize: '1rem', display: 'block', marginBottom: '0.75rem' }}>Razorpay Online Gateway Integration</label>
+              
+              {settings.payments_config?.razorpayConnected ? (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid var(--accent-success)', color: 'var(--accent-success)', padding: '0.35rem 0.75rem', borderRadius: '20px', fontSize: '0.82rem', fontWeight: 600 }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-success)' }} />
+                      Connected
+                    </div>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      Merchant Account ID: <strong>{settings.payments_config?.razorpayKeyId}</strong>
+                    </span>
+                  </div>
+                  
+                  <button type="button" className="btn btn-secondary" onClick={handleDisconnectRazorpay} style={{ borderColor: 'var(--accent-danger)', color: 'var(--accent-danger)' }}>
+                    Disconnect Razorpay Account
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: '1.5' }}>
+                    Connect your Razorpay account to accept secure credit card, netbanking, and wallet payments directly on your invoices.
+                  </p>
+                  
+                  <button type="button" className="btn btn-primary" onClick={handleConnectRazorpay}>
+                    Connect with Razorpay
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox" 
+                  checked={settings.payments_config?.passGatewayFees === true}
+                  onChange={e => updateSettingState('payments_config', 'passGatewayFees', e.target.checked)}
+                  style={{ width: '18px', height: '18px' }}
+                />
+                <span style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+                  Pass Razorpay Transaction Fee (2.00%) to client as a surcharge
+                </span>
+              </label>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.25rem', marginLeft: '1.75rem' }}>
+                If enabled, clients will cover the 2% fee at checkout (e.g., a ₹1,000 invoice will bill ₹1,020.41, netting you exactly ₹1,000.00).
+              </span>
             </div>
 
             <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>

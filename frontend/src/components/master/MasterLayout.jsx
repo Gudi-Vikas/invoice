@@ -1,6 +1,7 @@
-import React from 'react';
+
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import ThemeToggle from '../ThemeToggle';
 import {
   LayoutDashboard, Building2, Receipt, ShieldCheck, LogOut, Layers
 } from 'lucide-react';
@@ -81,13 +82,16 @@ export const MasterLayout = () => {
           })}
         </nav>
 
-        {/* Footer */}
+        {/* Footer: Master Admin + Theme Toggle + Logout */}
         <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
-          <div style={{ marginBottom: '0.75rem' }}>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Master Admin:</p>
-            <p style={{ color: 'hsl(262, 83%, 75%)', fontWeight: 500, marginTop: '0.15rem', fontSize: '0.82rem' }}>
-              {user?.email || 'admin'}
-            </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '0.5rem' }}>
+            <div style={{ overflow: 'hidden' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Master Admin:</p>
+              <p style={{ color: 'hsl(262, 83%, 75%)', fontWeight: 500, marginTop: '0.15rem', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user?.email || 'admin'}
+              </p>
+            </div>
+            <ThemeToggle style={{ flexShrink: 0 }} />
           </div>
           <button
             onClick={handleLogout}

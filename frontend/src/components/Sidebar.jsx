@@ -1,7 +1,7 @@
-import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import TenantSwitcher from './TenantSwitcher';
+import ThemeToggle from './ThemeToggle';
 import {
   LayoutDashboard,
   FileText,
@@ -11,7 +11,8 @@ import {
   Settings,
   CreditCard,
   LogOut,
-  Layers
+  Layers,
+  UserPlus
 } from 'lucide-react';
 
 /**
@@ -26,9 +27,10 @@ export const Sidebar = () => {
   const menuItems = [
     { path: '/dashboard',        name: 'Dashboard',        icon: LayoutDashboard },
     { path: '/clients',          name: 'Clients',          icon: Users },
-    { path: '/documents',        name: 'Documents',        icon: FileText },
-    { path: '/documents/create', name: 'New Document',     icon: PlusCircle },
+    { path: '/invoices',         name: 'Invoices',         icon: FileText },
+    { path: '/quotes',           name: 'Quotations',       icon: FileText },
     { path: '/vendors',          name: 'Vendors Hub',      icon: Store },
+    { path: '/team',             name: 'Team Invites',     icon: UserPlus },
     { path: '/settings',         name: 'Settings',         icon: Settings },
     { path: '/subscription',     name: 'Subscription',     icon: CreditCard }
   ];
@@ -53,7 +55,7 @@ export const Sidebar = () => {
         <div>
           <h2 style={{
             fontSize: '1.25rem', fontWeight: 800, fontFamily: 'var(--font-display)',
-            background: 'linear-gradient(to right, #fff, var(--text-secondary))',
+            background: 'linear-gradient(to right, var(--text-primary), var(--text-secondary))',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
           }}>
             UltraKey
@@ -101,13 +103,16 @@ export const Sidebar = () => {
         })}
       </nav>
 
-      {/* Footer: User Info + Logout */}
+      {/* Footer: User Info + Theme Toggle + Logout */}
       <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
-        <div style={{ marginBottom: '0.75rem' }}>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Logged in as:</p>
-          <p style={{ color: 'var(--text-secondary)', fontWeight: 500, marginTop: '0.15rem', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {user?.email || 'Unknown'}
-          </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '0.5rem' }}>
+          <div style={{ overflow: 'hidden' }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Logged in as:</p>
+            <p style={{ color: 'var(--text-secondary)', fontWeight: 500, marginTop: '0.15rem', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {user?.email || 'Unknown'}
+            </p>
+          </div>
+          <ThemeToggle style={{ flexShrink: 0 }} />
         </div>
         <button
           id="btn-logout"

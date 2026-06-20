@@ -1,9 +1,10 @@
 import jwt from 'jsonwebtoken';
 import { runInTransaction } from '../config/db.js';
 import { getNextDocumentNumber } from '../utils/sequence.js';
-import { postInvoiceLedger } from '../services/ledgerService.js';
+import { postInvoiceLedger, postPaymentLedger } from '../services/ledgerService.js';
+import emailService from '../services/emailService.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkey123!';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 /**
  * Controller orchestrating Quotation and Invoicing document lifecycles.
@@ -58,6 +59,7 @@ export const documentController = {
             adjust: adjust,
             amount: lineAmount,
             vendorId: line.vendorId || null,
+            vendorCost: line.vendorCost !== undefined && line.vendorCost !== null && line.vendorCost !== '' ? parseFloat(line.vendorCost) : null,
             sortOrder: idx
           };
         });
@@ -105,10 +107,10 @@ export const documentController = {
         for (const line of parsedLines) {
           await client.query(
             `INSERT INTO document_lines
-               (document_id, tenant_id, quantity, description, unit_price, adjust, amount, vendor_id, sort_order)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+               (document_id, tenant_id, quantity, description, unit_price, adjust, amount, vendor_id, vendor_cost, sort_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
             [savedDoc.id, req.tenantId, line.quantity, line.description,
-             line.unitPrice, line.adjust, line.amount, line.vendorId, line.sortOrder]
+             line.unitPrice, line.adjust, line.amount, line.vendorId, line.vendorCost, line.sortOrder]
           );
         }
 
@@ -133,7 +135,7 @@ export const documentController = {
    * 2. Retrieves a paginated list of documents with optional status, type, and date filters.
    */
   getDocuments: async (req, res, next) => {
-    const { type, status, dateFrom, dateTo } = req.query;
+    const { type, status, dateFrom, dateTo, clientId } = req.query;
     const page = parseInt(req.query.page || 1, 10);
     const limit = parseInt(req.query.limit || 50, 10);
     const offset = (page - 1) * limit;
@@ -143,7 +145,7 @@ export const documentController = {
         let sql = `
           SELECT d.id, d.type, d.document_number, d.status,
                  d.sub_total, d.discount_amount, d.tax_amount, d.total_due,
-                 d.due_date, d.issue_date, d.created_at, d.razorpay_order_id,
+                 d.due_date, d.issue_date, d.created_at, d.razorpay_order_id, d.offline_payment_info,
                  c.name as client_name, c.email as client_email
           FROM documents d
           JOIN clients c ON d.client_id = c.id
@@ -155,6 +157,7 @@ export const documentController = {
         if (status) { params.push(status); sql += ` AND d.status = $${params.length}`; }
         if (dateFrom) { params.push(dateFrom); sql += ` AND d.created_at >= $${params.length}`; }
         if (dateTo) { params.push(dateTo); sql += ` AND d.created_at <= $${params.length}`; }
+        if (clientId) { params.push(clientId); sql += ` AND d.client_id = $${params.length}`; }
 
         sql += ` ORDER BY d.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
 
@@ -164,6 +167,7 @@ export const documentController = {
         const countParams = [req.tenantId];
         if (type) { countParams.push(type); countSql += ` AND type = $${countParams.length}`; }
         if (status) { countParams.push(status); countSql += ` AND status = $${countParams.length}`; }
+        if (clientId) { countParams.push(clientId); countSql += ` AND client_id = $${countParams.length}`; }
 
         const countQuery = await client.query(countSql, countParams);
         const totalCount = parseInt(countQuery.rows[0].count, 10);
@@ -178,7 +182,50 @@ export const documentController = {
   },
 
   /**
-   * 3. Retrieves detailed record of a specific document including line items.
+   * 3. Retrieves counts of documents grouped by status for a specific type.
+   */
+  getDocumentStats: async (req, res, next) => {
+    const { type, clientId } = req.query;
+    try {
+      const stats = await runInTransaction(req.tenantId, async (client) => {
+        let sql = `
+          SELECT status, COUNT(*) as count 
+          FROM documents 
+          WHERE tenant_id = $1 
+        `;
+        const params = [req.tenantId];
+        if (type) {
+          params.push(type);
+          sql += ` AND type = $${params.length}`;
+        }
+        if (clientId) {
+          params.push(clientId);
+          sql += ` AND client_id = $${params.length}`;
+        }
+        sql += ` GROUP BY status`;
+
+        const result = await client.query(sql, params);
+        
+        let totalCount = 0;
+        const statusCounts = result.rows.reduce((acc, row) => {
+          const count = parseInt(row.count, 10);
+          acc[row.status] = count;
+          totalCount += count;
+          return acc;
+        }, {});
+        
+        statusCounts['all'] = totalCount;
+        return statusCounts;
+      });
+
+      return res.json(stats);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * 4. Retrieves detailed record of a specific document including line items.
    */
   getDocumentDetails: async (req, res, next) => {
     const { id } = req.params;
@@ -198,7 +245,7 @@ export const documentController = {
         if (docRes.rows.length === 0) return null;
 
         const linesRes = await client.query(
-          `SELECT dl.id, dl.quantity, dl.description, dl.unit_price, dl.adjust, dl.amount, dl.vendor_id, dl.sort_order,
+          `SELECT dl.id, dl.quantity, dl.description, dl.unit_price, dl.adjust, dl.amount, dl.vendor_id, dl.vendor_cost, dl.sort_order,
                   v.business_name as vendor_name
            FROM document_lines dl
            LEFT JOIN vendors v ON dl.vendor_id = v.id
@@ -221,13 +268,13 @@ export const documentController = {
   },
 
   /**
-   * 4. Updates a document's status. Triggers ledger posting when moving to published/sent.
+   * 5. Updates a document's status. Triggers ledger posting when moving to published/sent.
    */
   updateDocumentStatus: async (req, res, next) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const validStatuses = ['draft', 'published', 'sent', 'accepted', 'paid', 'overdue', 'voided'];
+    const validStatuses = ['draft', 'published', 'sent', 'accepted', 'declined', 'paid', 'overdue', 'voided', 'pending_verification'];
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` });
     }
@@ -245,8 +292,8 @@ export const documentController = {
         }
 
         const doc = currentRes.rows[0];
-        const wasPublished = ['published', 'sent'].includes(doc.status);
-        const isNowPublished = ['published', 'sent'].includes(status);
+        const wasPublished = ['published', 'sent', 'pending_verification'].includes(doc.status);
+        const isNowPublished = ['published', 'sent', 'pending_verification', 'paid'].includes(status);
 
         // Update status
         const updateRes = await client.query(
@@ -255,11 +302,27 @@ export const documentController = {
         );
         const updated = updateRes.rows[0];
 
-        // Trigger ledger posting if invoice first moves to published/sent
+        // Trigger ledger posting if invoice first moves to published/sent/pending_verification/paid
         if (doc.type === 'invoice' && !wasPublished && isNowPublished) {
           await postInvoiceLedger(
             client, req.tenantId, doc.document_number,
             doc.sub_total, doc.tax_amount, doc.total_due, doc.id
+          );
+        }
+
+        // Trigger payment ledger posting if invoice moves to paid
+        if (doc.type === 'invoice' && doc.status !== 'paid' && status === 'paid') {
+          await postPaymentLedger(
+            client,
+            req.tenantId,
+            doc.document_number,
+            parseFloat(doc.total_due),
+            0, // gatewayFee (0 for manual/offline payments)
+            doc.id,
+            0, // convenienceFeeAmount
+            0, // convenienceFeeTax
+            parseFloat(doc.total_due), // baseInvoiceTotal
+            true // isOffline
           );
         }
 
@@ -273,7 +336,7 @@ export const documentController = {
   },
 
   /**
-   * 5. Soft-deletes a document (set status to 'voided') or hard-deletes if draft.
+   * 6. Soft-deletes a document (set status to 'voided') or hard-deletes if draft.
    */
   deleteDocument: async (req, res, next) => {
     const { id } = req.params;
@@ -310,7 +373,7 @@ export const documentController = {
   },
 
   /**
-   * 6. Generates a signed JWT magic link token for client portal access.
+   * 7. Generates a signed JWT magic link token for client portal access.
    * The token encodes documentId + tenantId and expires in 72 hours.
    */
   generateMagicToken: async (req, res, next) => {
@@ -341,6 +404,278 @@ export const documentController = {
       return res.json({
         message: 'Magic link generated.',
         data: { token, portalUrl, documentNumber: doc.document_number, expiresIn: '72 hours' }
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * 8. Compiles email templates and sends document link/QR code to client.
+   * Updates status to 'sent' if in draft/published state.
+   */
+  sendDocumentEmail: async (req, res, next) => {
+    const { id } = req.params;
+    const { subjectOverride, bodyOverride } = req.body || {};
+
+    try {
+      const emailResult = await runInTransaction(req.tenantId, async (client) => {
+        // A. Load document, client, and tenant settings
+        const docRes = await client.query(
+          `SELECT d.*, c.name as client_name, c.email as client_email,
+                  ts.business_info, ts.email_templates, ts.tax_config
+           FROM documents d
+           JOIN clients c ON d.client_id = c.id
+           JOIN tenant_settings ts ON d.tenant_id = ts.tenant_id
+           WHERE d.tenant_id = $1 AND d.id = $2`,
+          [req.tenantId, id]
+        );
+
+        if (docRes.rows.length === 0) {
+          throw Object.assign(new Error('Document not found.'), { status: 404 });
+        }
+
+        const doc = docRes.rows[0];
+        const businessInfo = doc.business_info || {};
+        const emailTemplates = doc.email_templates || {};
+        const taxConfig = doc.tax_config || {};
+        const currencySymbol = taxConfig.currencySymbol || '₹';
+
+        // B. Generate portal magic token
+        const token = jwt.sign(
+          { documentId: doc.id, tenantId: req.tenantId, type: doc.type },
+          JWT_SECRET,
+          { expiresIn: '72h' }
+        );
+
+        const portalUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/portal/documents/${token}`;
+        const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(portalUrl)}`;
+
+        // C. Select template based on type
+        const templateKey = doc.type === 'quote' ? 'quote_availability' : 'invoice_availability';
+        const template = emailTemplates[templateKey] || {
+          subject: doc.type === 'quote' ? 'Quotation {{document_number}} is ready' : 'Invoice {{document_number}} generated',
+          body: 'Hello {{client_name}},\n\nYour {{type}} is available here: {{portal_link}}'
+        };
+
+        let subject = subjectOverride || template.subject;
+        let body = bodyOverride || template.body;
+
+        // D. Replace placeholders
+        const placeholders = {
+          '{{document_number}}': doc.document_number,
+          '{{client_name}}': doc.client_name,
+          '{{portal_link}}': portalUrl,
+          '{{due_date}}': new Date(doc.due_date).toLocaleDateString(),
+          '{{amount}}': `${currencySymbol}${parseFloat(doc.total_due).toFixed(2)}`,
+          '{{type}}': doc.type
+        };
+
+        for (const [key, value] of Object.entries(placeholders)) {
+          subject = subject.replaceAll(key, value);
+          body = body.replaceAll(key, value);
+        }
+
+        // E. Transition status to sent if draft/published BEFORE sending email
+        // This ensures that if the email service fails and throws an error, the transaction rolls back these DB changes.
+        if (['draft', 'published'].includes(doc.status)) {
+          await client.query(
+            `UPDATE documents SET status = 'sent' WHERE tenant_id = $1 AND id = $2`,
+            [req.tenantId, id]
+          );
+
+          if (doc.type === 'invoice' && doc.status === 'draft') {
+            await postInvoiceLedger(
+              client, req.tenantId, doc.document_number,
+              doc.sub_total, doc.tax_amount, doc.total_due, doc.id
+            );
+          }
+        }
+
+        // F. Build beautiful premium HTML email body with QR code and styling
+        const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${subject}</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #fafafa;
+      color: #1e293b;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrapper {
+      width: 100%;
+      background-color: #fafafa;
+      padding: 40px 0;
+    }
+    .container {
+      max-width: 580px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+    }
+    .header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      padding: 36px 30px;
+      color: #ffffff;
+      text-align: center;
+    }
+    .header img {
+      max-height: 48px;
+      margin-bottom: 16px;
+      border-radius: 8px;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+    }
+    .content {
+      padding: 40px 35px;
+    }
+    .content p {
+      line-height: 1.625;
+      font-size: 15px;
+      color: #334155;
+      margin-bottom: 24px;
+    }
+    .card {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+    .card-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #64748b;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+    .card-value {
+      font-size: 30px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 8px;
+    }
+    .card-meta {
+      font-size: 14px;
+      color: #475569;
+    }
+    .btn-container {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .btn {
+      display: inline-block;
+      background-color: #3b82f6;
+      color: #ffffff !important;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      padding: 14px 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+    }
+    .qr-container {
+      text-align: center;
+      padding: 24px 20px;
+      border-top: 1px dashed #e2e8f0;
+      margin-top: 32px;
+    }
+    .qr-container p {
+      font-size: 13px;
+      color: #64748b;
+      margin-bottom: 12px;
+    }
+    .qr-code {
+      border: 1px solid #e2e8f0;
+      padding: 8px;
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+    }
+    .footer {
+      background-color: #f8fafc;
+      padding: 24px 30px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 12px;
+      color: #64748b;
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="container">
+      <div class="header">
+        ${businessInfo.logoUrl ? `<img src="${businessInfo.logoUrl}" alt="Logo">` : ''}
+        <h1>${businessInfo.businessName || 'Business Document'}</h1>
+      </div>
+      <div class="content">
+        <p style="white-space: pre-wrap; margin-top: 0;">${body.replace(portalUrl, '')}</p>
+        
+        <div class="card">
+          <div class="card-label">${doc.type === 'quote' ? 'Quotation Estimate' : 'Amount Due'}</div>
+          <div class="card-value">${currencySymbol}${parseFloat(doc.total_due).toFixed(2)}</div>
+          <div class="card-meta">
+            <strong>${doc.type === 'quote' ? 'Valid Until' : 'Due Date'}:</strong> ${new Date(doc.due_date).toLocaleDateString()}
+          </div>
+        </div>
+
+        <div class="btn-container">
+          <a href="${portalUrl}" class="btn" target="_blank">
+            ${doc.type === 'quote' ? 'View & Respond to Quotation' : 'View & Pay Invoice Online'}
+          </a>
+        </div>
+
+        <div class="qr-container">
+          <p>${doc.type === 'quote' ? 'Scan the QR code below to view and accept this quotation on your mobile device:' : 'Scan the QR code below to view and pay on your mobile device:'}</p>
+          <img src="${qrCodeUrl}" width="150" height="150" alt="${doc.type === 'quote' ? 'Quotation QR Code' : 'Payment QR Code'}" class="qr-code">
+        </div>
+      </div>
+      <div class="footer">
+        <p>This email was automatically generated by ${businessInfo.businessName || 'our systems'} on behalf of your vendor.</p>
+        ${businessInfo.address ? `<p>${businessInfo.address}</p>` : ''}
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+        `;
+
+        // G. Send the email LAST as the external side-effect
+        const sendRes = await emailService.sendEmail({
+          to: doc.client_email,
+          subject,
+          body,
+          html
+        });
+
+        return {
+          success: true,
+          recipient: doc.client_email,
+          previewFile: sendRes.previewFile,
+          portalUrl
+        };
+      });
+
+      return res.json({
+        message: `Document emailed successfully to ${emailResult.recipient}.`,
+        data: emailResult
       });
     } catch (err) {
       next(err);

@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 /**
  * AuthContext — Central authentication state manager.
@@ -10,7 +12,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
  * Expired tokens trigger automatic logout.
  */
 
-const API_BASE = 'http://localhost:5000/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
 const AuthContext = createContext(null);
 
@@ -95,6 +97,19 @@ export const AuthProvider = ({ children }) => {
     setIsMasterAdmin(isMaster);
   }, []);
 
+  const clearAuth = useCallback(() => {
+    localStorage.removeItem(LS_TOKEN);
+    localStorage.removeItem(LS_USER);
+    localStorage.removeItem(LS_ACTIVE);
+    localStorage.removeItem(LS_ALL_TENANTS);
+    localStorage.removeItem(LS_IS_MASTER);
+    setToken(null);
+    setUser(null);
+    setActiveTenant(null);
+    setAllTenants([]);
+    setIsMasterAdmin(false);
+  }, []);
+
   // ── Hydrate state from localStorage on mount ───────────────────────────
   useEffect(() => {
     const storedToken = localStorage.getItem(LS_TOKEN);
@@ -109,27 +124,14 @@ export const AuthProvider = ({ children }) => {
       clearAuth();
     }
     setLoading(false);
-  }, []);
+  }, [clearAuth]);
 
   // ── Listen for forced logout events from api.js ────────────────────────
   useEffect(() => {
     const handleForceLogout = () => clearAuth();
     window.addEventListener('auth:logout', handleForceLogout);
     return () => window.removeEventListener('auth:logout', handleForceLogout);
-  }, []);
-
-  const clearAuth = () => {
-    localStorage.removeItem(LS_TOKEN);
-    localStorage.removeItem(LS_USER);
-    localStorage.removeItem(LS_ACTIVE);
-    localStorage.removeItem(LS_ALL_TENANTS);
-    localStorage.removeItem(LS_IS_MASTER);
-    setToken(null);
-    setUser(null);
-    setActiveTenant(null);
-    setAllTenants([]);
-    setIsMasterAdmin(false);
-  };
+  }, [clearAuth]);
 
   // ── Auth Actions ───────────────────────────────────────────────────────
 

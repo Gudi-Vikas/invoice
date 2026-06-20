@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useSettings } from '../context/SettingsContext';
@@ -24,11 +25,7 @@ export const Dashboard = () => {
   const [recentDocs, setRecentDocs] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       const docsRes = await api.getDocuments({ limit: 50 });
       const documents = docsRes.documents || [];
@@ -51,7 +48,11 @@ export const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
 
   const currencySymbol = settings?.tax_config?.currencySymbol || '₹';
 

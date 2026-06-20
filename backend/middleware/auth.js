@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { runWithoutRLS } from '../config/db.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkey123!';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 /**
  * Unified authentication middleware.
@@ -92,6 +92,13 @@ export const authenticateToken = async (req, res, next) => {
  * Use after authenticateToken on any tenant-scoped route.
  */
 export const requireTenant = (req, res, next) => {
+  if (req.masterAdmin) {
+    const tenantId = req.headers['x-tenant-id'] || req.query.tenantId || req.body.tenantId;
+    if (tenantId) {
+      req.tenantId = tenantId;
+      return next();
+    }
+  }
   if (!req.tenantId) {
     return res.status(400).json({
       error: 'Active tenant context (x-tenant-id header or parameter) is required'
@@ -106,6 +113,9 @@ export const requireTenant = (req, res, next) => {
  */
 export const checkRole = (allowedRoles) => {
   return (req, res, next) => {
+    if (req.masterAdmin) {
+      return next();
+    }
     if (!req.role || !allowedRoles.includes(req.role)) {
       return res.status(403).json({
         error: 'Forbidden: Insufficient privileges for this operation'

@@ -1,18 +1,21 @@
-import React, { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from 'react';
 import api from '../api';
 import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
 import {
-  FileText, Plus, Trash2, ArrowLeft, FilePlus, Copy, Check,
-  UserPlus, Printer, ChevronLeft, ChevronRight, Minus, Tag
+  FileText, Plus, Trash2, ArrowLeft, FilePlus, Copy, Check, X,
+  UserPlus, Printer, ChevronLeft, ChevronRight, Tag,
+  Mail, Loader, ShieldCheck
 } from 'lucide-react';
+import DocumentListTable from './DocumentListTable';
 
 /**
  * Documents Module (Quotes & Invoices Manager).
  * Contains list, builder form with real-time tax math, and PDF invoice visualizer.
  * Uses SettingsContext — no redundant getSettings() calls.
  */
-export const Documents = ({ initialView = 'list' }) => {
+export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => {
   const { settings } = useSettings();
   const { showToast } = useToast();
   const [view, setView] = useState(initialView);
@@ -22,9 +25,7 @@ export const Documents = ({ initialView = 'list' }) => {
   const [selectedDocId, setSelectedDocId] = useState(null);
   const [docDetails, setDocDetails] = useState(null);
 
-  // Filtering and pagination
-  const [filterType, setFilterType] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
+  // Filtering and pagination (no longer used for list view, handled by DocumentListTable)
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -38,28 +39,19 @@ export const Documents = ({ initialView = 'list' }) => {
   const [newClientEmail, setNewClientEmail] = useState('');
 
   // Form states
-  const [formType, setFormType] = useState('invoice');
+  const [formType, setFormType] = useState(defaultType);
   const [formClientId, setFormClientId] = useState('');
   const [formDueDate, setFormDueDate] = useState('');
-  const [formLines, setFormLines] = useState([{ description: '', quantity: 1, unitPrice: 0, adjust: 0, vendorId: '' }]);
-  const [formStatus, setFormStatus] = useState('draft');
+  const [formLines, setFormLines] = useState([{ description: '', quantity: 1, unitPrice: 0, adjust: 0, vendorId: '', vendorCost: '' }]);
+
 
   // Status update tracking
   const [updatingStatus, setUpdatingStatus] = useState(null);
+  const [verifyingDoc, setVerifyingDoc] = useState(null);
+  const [sendingEmailId, setSendingEmailId] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    loadMetadata();
-  }, []);
-
-  useEffect(() => {
-    setPage(1);
-  }, [filterType, filterStatus]);
-
-  useEffect(() => {
-    loadDocuments();
-  }, [filterType, filterStatus, page]);
-
-  const loadMetadata = async () => {
+  const loadMetadata = useCallback(async () => {
     try {
       const clientData = await api.getClients();
       setClients(clientData.clients || []);
@@ -68,21 +60,18 @@ export const Documents = ({ initialView = 'list' }) => {
     } catch (err) {
       showToast('Failed to load form config values: ' + err.message, 'error');
     }
-  };
+  }, [showToast]);
 
-  const loadDocuments = async () => {
-    try {
-      const params = { page, limit: 10 };
-      if (filterType !== 'all') params.type = filterType;
-      if (filterStatus !== 'all') params.status = filterStatus;
-      const data = await api.getDocuments(params);
-      setDocuments(data.documents || []);
-      setTotalPages(data.totalPages || 1);
-      setTotalCount(data.totalCount || 0);
-    } catch (err) {
-      showToast('Failed to load documents: ' + err.message, 'error');
-    }
-  };
+  useEffect(() => {
+    loadMetadata();
+  }, [loadMetadata]);
+
+  // The DocumentListTable handles list data fetching now, but we keep a dummy function
+  // so the rest of the component (e.g. details view actions) can "refresh" list data if needed,
+  // although switching back to view='list' will trigger a remount of DocumentListTable anyway.
+  const loadDocuments = useCallback(async () => {
+    // No-op or trigger a refresh if we had a ref
+  }, []);
 
   const handleCreateClient = async (e) => {
     e.preventDefault();
@@ -99,7 +88,7 @@ export const Documents = ({ initialView = 'list' }) => {
   };
 
   const handleAddLine = () => {
-    setFormLines(prev => [...prev, { description: '', quantity: 1, unitPrice: 0, adjust: 0, vendorId: '' }]);
+    setFormLines(prev => [...prev, { description: '', quantity: 1, unitPrice: 0, adjust: 0, vendorId: '', vendorCost: '' }]);
   };
 
   const handleRemoveLine = (idx) => {
@@ -118,7 +107,8 @@ export const Documents = ({ initialView = 'list' }) => {
       quantity: item.qty || 1,
       unitPrice: item.price || 0,
       adjust: 0,
-      vendorId: ''
+      vendorId: '',
+      vendorCost: ''
     }]);
   };
 
@@ -149,20 +139,24 @@ export const Documents = ({ initialView = 'list' }) => {
   };
 
   const handleSaveDocument = async () => {
+    if (isSaving) return;
     if (!formClientId) { showToast('Please select a client.', 'warning'); return; }
     const validLines = formLines.filter(l => l.description.trim() && parseFloat(l.quantity) > 0);
     if (validLines.length === 0) { showToast('Please enter at least one valid line item.', 'warning'); return; }
 
+    setIsSaving(true);
     try {
       await api.createDocument({
-        clientId: formClientId, type: formType, status: formStatus,
+        clientId: formClientId, type: formType, status: 'published',
         dueDate: formDueDate || undefined, lines: validLines
       });
       showToast('Document created successfully!', 'success');
-      setFormClientId(''); setFormLines([{ description: '', quantity: 1, unitPrice: 0, adjust: 0, vendorId: '' }]);
+      setFormClientId(''); setFormLines([{ description: '', quantity: 1, unitPrice: 0, adjust: 0, vendorId: '', vendorCost: '' }]);
       setView('list'); loadDocuments();
     } catch (err) {
       showToast('Failed to generate document: ' + err.message, 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -191,11 +185,35 @@ export const Documents = ({ initialView = 'list' }) => {
     setTimeout(() => setCopiedId(null), 3000);
   };
 
+  const handleSendEmail = async () => {
+    if (!docDetails) return;
+    setSendingEmailId(docDetails.id);
+    try {
+      const res = await api.sendDocumentEmail(docDetails.id);
+      showToast(res.message || 'Email sent successfully!', 'success');
+      // Transition status to sent locally if draft/published
+      setDocDetails(prev => ({
+        ...prev,
+        status: (prev.status === 'draft' || prev.status === 'published') ? 'sent' : prev.status
+      }));
+      loadDocuments();
+    } catch (err) {
+      showToast('Failed to send email: ' + err.message, 'error');
+    } finally {
+      setSendingEmailId(null);
+    }
+  };
+
   const handleStatusChange = async (docId, newStatus) => {
     setUpdatingStatus(docId);
     try {
       await api.updateDocumentStatus(docId, newStatus);
+      showToast(`Document status updated to ${newStatus}.`, 'success');
       loadDocuments();
+      if (selectedDocId === docId) {
+        const data = await api.getDocument(docId);
+        setDocDetails(data);
+      }
     } catch (err) {
       showToast('Status update failed: ' + err.message, 'error');
     } finally {
@@ -214,130 +232,24 @@ export const Documents = ({ initialView = 'list' }) => {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
             <div>
-              <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem', fontWeight: 800 }}>Invoice & Quote Grid</h1>
+              <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem', fontWeight: 800 }}>
+                {defaultType === 'quote' ? 'Quotations' : 'Invoices'}
+              </h1>
               <p style={{ color: 'var(--text-secondary)' }}>
-                {totalCount} documents · Page {page} of {totalPages}
+                Manage your {defaultType === 'quote' ? 'quotes' : 'invoices'}.
               </p>
             </div>
-            <button className="btn btn-primary" onClick={() => setView('create')}>
-              <Plus size={16} /> New Document
+            <button className="btn btn-primary" onClick={() => { setFormType(defaultType); setView('create'); }}>
+              <Plus size={16} /> New {defaultType === 'quote' ? 'Quote' : 'Invoice'}
             </button>
           </div>
-
-          {/* Filters Bar */}
-          <div className="glass-card" style={{ padding: '1rem 1.5rem', marginBottom: '1.5rem', display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-            <div>
-              <span className="form-label" style={{ marginBottom: 0, marginRight: '0.5rem', display: 'inline-block' }}>Type:</span>
-              <select className="form-select" style={{ width: 'auto', display: 'inline-block', padding: '0.4rem 1.5rem 0.4rem 0.75rem' }}
-                value={filterType} onChange={e => setFilterType(e.target.value)}>
-                <option value="all">All</option>
-                <option value="quote">Quotation</option>
-                <option value="invoice">Invoice</option>
-              </select>
-            </div>
-            <div>
-              <span className="form-label" style={{ marginBottom: 0, marginRight: '0.5rem', display: 'inline-block' }}>Status:</span>
-              <select className="form-select" style={{ width: 'auto', display: 'inline-block', padding: '0.4rem 1.5rem 0.4rem 0.75rem' }}
-                value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-                <option value="all">All Statuses</option>
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-                <option value="sent">Sent</option>
-                <option value="accepted">Accepted</option>
-                <option value="paid">Paid</option>
-                <option value="overdue">Overdue</option>
-                <option value="voided">Voided</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Table */}
-          <div className="glass-card" style={{ padding: 0 }}>
-            <div className="table-container" style={{ margin: 0 }}>
-              {documents.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '3rem' }}>No documents matching filters found.</p>
-              ) : (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Doc Number</th>
-                      <th>Client</th>
-                      <th>Created</th>
-                      <th>Due Date</th>
-                      <th>Type</th>
-                      <th>Status</th>
-                      <th style={{ textAlign: 'right' }}>Total</th>
-                      <th style={{ textAlign: 'right' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {documents.map(doc => (
-                      <tr key={doc.id}>
-                        <td style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>{doc.document_number}</td>
-                        <td>{doc.client_name}</td>
-                        <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{new Date(doc.created_at).toLocaleDateString()}</td>
-                        <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{new Date(doc.due_date).toLocaleDateString()}</td>
-                        <td style={{ textTransform: 'capitalize' }}>{doc.type}</td>
-                        <td>
-                          <select
-                            className="form-select"
-                            style={{ padding: '0.25rem 1.5rem 0.25rem 0.5rem', width: 'auto', fontSize: '0.8rem', cursor: 'pointer' }}
-                            value={doc.status}
-                            onChange={e => handleStatusChange(doc.id, e.target.value)}
-                            disabled={updatingStatus === doc.id || doc.status === 'paid' || doc.status === 'voided'}
-                          >
-                            <option value="draft">Draft</option>
-                            <option value="published">Published</option>
-                            <option value="sent">Sent</option>
-                            <option value="accepted">Accepted</option>
-                            <option value="paid">Paid</option>
-                            <option value="overdue">Overdue</option>
-                            <option value="voided">Voided</option>
-                          </select>
-                        </td>
-                        <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                          {currencySymbol}{parseFloat(doc.total_due).toFixed(2)}
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                            <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => viewDetails(doc.id)}>
-                              View
-                            </button>
-                            <button
-                              className="btn btn-secondary"
-                              style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', color: copiedId === doc.id ? 'var(--accent-success)' : 'inherit' }}
-                              onClick={() => handleCopyMagicLink(doc)}
-                              title="Copy Magic Link"
-                            >
-                              {copiedId === doc.id ? <Check size={14} /> : <Copy size={14} />}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div style={{
-                display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
-                gap: '0.5rem', padding: '1rem 1.5rem', borderTop: '1px solid var(--border-color)'
-              }}>
-                <button className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}
-                  onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-                  <ChevronLeft size={14} /> Prev
-                </button>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{page} / {totalPages}</span>
-                <button className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-                  Next <ChevronRight size={14} />
-                </button>
-              </div>
-            )}
-          </div>
+          
+          <DocumentListTable 
+            defaultType={defaultType}
+            onViewDetails={viewDetails}
+            onCopyLink={handleCopyMagicLink}
+            onVerifyPayment={setVerifyingDoc}
+          />
         </div>
       )}
 
@@ -409,7 +321,8 @@ export const Documents = ({ initialView = 'list' }) => {
 
                 {formLines.map((line, idx) => (
                   <div key={idx} style={{
-                    display: 'grid', gridTemplateColumns: '3fr 1fr 1fr 1fr 1.5fr auto',
+                    display: 'grid',
+                    gridTemplateColumns: line.vendorId ? '2.5fr 1fr 1fr 1fr 1.5fr 1.25fr auto' : '3fr 1fr 1fr 1fr 1.5fr auto',
                     gap: '0.65rem', alignItems: 'end', marginBottom: '0.85rem',
                     padding: '0.85rem', background: 'rgba(255,255,255,0.01)',
                     border: '1px solid var(--border-color)', borderRadius: '10px'
@@ -439,11 +352,23 @@ export const Documents = ({ initialView = 'list' }) => {
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label" style={{ fontSize: '0.72rem' }}>Vendor</label>
                       <select className="form-select" value={line.vendorId}
-                        onChange={e => updateLineField(idx, 'vendorId', e.target.value)}>
+                        onChange={e => {
+                          const v = e.target.value;
+                          setFormLines(prev => prev.map((l, i) => i === idx ? { ...l, vendorId: v, vendorCost: v ? l.vendorCost : '' } : l));
+                        }}>
                         <option value="">Tenant (Internal)</option>
                         {vendors.map(v => <option key={v.id} value={v.id}>{v.business_name}</option>)}
                       </select>
                     </div>
+                    {line.vendorId && (
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label" style={{ fontSize: '0.72rem' }}>Payout Cost</label>
+                        <input type="number" className="form-input" value={line.vendorCost || ''}
+                          onChange={e => updateLineField(idx, 'vendorCost', e.target.value)}
+                          placeholder="e.g. 800"
+                          title="Optional dedicated flat cost paid to vendor instead of standard commission percentage" />
+                      </div>
+                    )}
                     <button type="button" className="btn btn-secondary"
                       onClick={() => handleRemoveLine(idx)}
                       style={{ padding: '0.75rem', color: 'var(--accent-danger)' }}
@@ -482,20 +407,21 @@ export const Documents = ({ initialView = 'list' }) => {
                       <span style={{ fontWeight: 700 }}>Total Due:</span>
                       <span style={{ fontWeight: 800, color: 'var(--accent-primary)' }}>{currencySymbol}{total.toFixed(2)}</span>
                     </div>
-                    <div className="form-group" style={{ marginTop: '1rem', marginBottom: 0 }}>
+                    <div className="form-group" style={{ marginTop: '1rem', marginBottom: '1rem' }}>
                       <label className="form-label">Due Date</label>
                       <input type="date" className="form-input" value={formDueDate} onChange={e => setFormDueDate(e.target.value)} />
                     </div>
-                    <div className="form-group" style={{ marginTop: '0.5rem', marginBottom: '1rem' }}>
-                      <label className="form-label">Document Status</label>
-                      <select className="form-select" value={formStatus} onChange={e => setFormStatus(e.target.value)}>
-                        <option value="draft">Draft</option>
-                        <option value="published">Published</option>
-                        <option value="sent">Sent</option>
-                      </select>
-                    </div>
-                    <button className="btn btn-primary" onClick={handleSaveDocument} style={{ width: '100%' }}>
-                      <FilePlus size={16} /> Save Document
+                    <button className="btn btn-primary" onClick={handleSaveDocument} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} disabled={isSaving}>
+                      {isSaving ? (
+                        <>
+                          <Loader size={16} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <FilePlus size={16} /> Save Document
+                        </>
+                      )}
                     </button>
                   </div>
                 );
@@ -517,6 +443,19 @@ export const Documents = ({ initialView = 'list' }) => {
               <span style={{ fontSize: '1.1rem', fontWeight: 700, textTransform: 'uppercase' }}>
                 {docDetails.type} Preview
               </span>
+              {sendingEmailId === docDetails.id ? (
+                <button className="btn btn-secondary" disabled style={{ gap: '0.5rem' }}>
+                  <Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> Sending...
+                </button>
+              ) : (
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleSendEmail}
+                  style={{ gap: '0.5rem' }}
+                >
+                  <Mail size={15} /> Send Email to Client
+                </button>
+              )}
               <button
                 className="btn btn-primary"
                 onClick={() => window.print()}
@@ -527,134 +466,330 @@ export const Documents = ({ initialView = 'list' }) => {
             </div>
           </div>
 
-          {/* Print-Only PDF Container */}
-          <div
-            id="print-area"
-            className="glass-card"
-            style={{
-              backgroundColor: '#fff', color: '#1a1b24', padding: '3rem',
-              borderRadius: '8px', maxWidth: '850px', margin: '0 auto',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.5)', fontFamily: '"Inter", sans-serif'
-            }}
-          >
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #eaeaea', paddingBottom: '2rem', marginBottom: '2.5rem' }}>
+          {docDetails.status === 'pending_verification' && (
+            <div className="glass-card fade-in" style={{ border: '1px solid rgba(245,158,11,0.3)', backgroundColor: 'rgba(245,158,11,0.06)', padding: '1.5rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
+                <h4 style={{ color: 'var(--accent-warning)', fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  Offline Payment Awaiting Approval
+                </h4>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: 0 }}>
+                  The client has submitted payment proof: <strong>{docDetails.offline_payment_info?.reference}</strong> via <strong>{docDetails.offline_payment_info?.method === 'bank_transfer' ? 'Bank Transfer' : 'UPI'}</strong>.
+                </p>
+                {docDetails.offline_payment_info?.notes && (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.5rem', fontStyle: 'italic', margin: 0 }}>
+                    Notes: "{docDetails.offline_payment_info.notes}"
+                  </p>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button 
+                  className="btn btn-primary" 
+                  style={{ backgroundColor: 'var(--accent-success)', borderColor: 'var(--accent-success)', color: '#fff' }}
+                  onClick={() => handleStatusChange(docDetails.id, 'paid')}
+                  disabled={updatingStatus === docDetails.id}
+                >
+                  Approve & Mark Paid
+                </button>
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ color: 'var(--accent-danger)', borderColor: 'var(--accent-danger)' }}
+                  onClick={() => handleStatusChange(docDetails.id, 'sent')} 
+                  disabled={updatingStatus === docDetails.id}
+                >
+                  Reject Payment
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Print-Only PDF Container */}
+          <div id="print-area" className="invoice-container">
+            {/* Header */}
+            <div className="invoice-header">
+              <div className="invoice-logo-container">
                 {docDetails.business_info?.logoUrl ? (
-                  <img src={docDetails.business_info.logoUrl} alt="Logo" style={{ maxHeight: '50px', marginBottom: '1rem', display: 'block' }} />
+                  <img src={docDetails.business_info.logoUrl} alt="Logo" className="invoice-logo" />
                 ) : (
-                  <h2 style={{ fontSize: '1.5rem', fontWeight: 800, textTransform: 'uppercase', color: '#111', marginBottom: '0.5rem' }}>
-                    {docDetails.business_info?.businessName || settings?.business_info?.businessName || 'Business Owner'}
+                  <h2 className="invoice-logo-fallback">
+                    {docDetails.business_info?.businessName || settings?.business_info?.businessName || 'Ultrakey'}
                   </h2>
                 )}
-                <p style={{ fontSize: '0.85rem', color: '#555', maxWidth: '300px', lineHeight: '1.4' }}>
-                  {docDetails.business_info?.address || settings?.business_info?.address}
-                </p>
-                <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '0.5rem' }}
-                  dangerouslySetInnerHTML={{ __html: docDetails.business_info?.extraInfo || settings?.business_info?.extraInfo || '' }} />
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <h1 style={{ fontSize: '2.5rem', fontWeight: 800, textTransform: 'uppercase', color: '#111', margin: 0, lineHeight: 1 }}>
-                  {docDetails.type === 'quote' ? 'Quotation' : 'Invoice'}
-                </h1>
-                <p style={{ fontSize: '1.1rem', fontWeight: 700, color: '#444', marginTop: '0.5rem' }}>
-                  #{docDetails.document_number}
-                </p>
-                <div style={{ marginTop: '1.5rem', fontSize: '0.85rem', color: '#555', display: 'inline-grid', gridTemplateColumns: 'auto auto', gap: '0.5rem 1.5rem', textAlign: 'left' }}>
-                  <span><b>Date Issued:</b></span><span>{new Date(docDetails.created_at).toLocaleDateString()}</span>
-                  <span><b>Due Date:</b></span><span>{new Date(docDetails.due_date).toLocaleDateString()}</span>
+              <div className="invoice-title-banner">
+                {docDetails.type === 'quote' ? 'Quotation' : 'Invoice'}
+              </div>
+            </div>
+
+            {/* Mid Section (From, To, Meta) */}
+            <div className="invoice-mid-section">
+              {/* Left Column: From and To Addresses */}
+              <div className="invoice-left-col">
+                {/* From Address */}
+                <div className="invoice-address-block">
+                  <div className="invoice-address-header">From:</div>
+                  <div className="invoice-address-body">
+                    <p><b>{docDetails.business_info?.businessName || settings?.business_info?.businessName || 'Ultrakey IT Solutions Private Limited'}</b></p>
+                    {docDetails.business_info?.address || settings?.business_info?.address ? (
+                      (docDetails.business_info?.address || settings?.business_info?.address || '').split('\n').map((line, i) => <p key={i}>{line}</p>)
+                    ) : (
+                      <>
+                        <p>Flat No. 204, 2nd Floor, Cyber Residency,</p>
+                        <p>Inidra Nagar, Gachibowli,</p>
+                        <p>Hyderabad, Telangana, India-500032</p>
+                      </>
+                    )}
+                    <p>{docDetails.business_info?.email || settings?.business_info?.email || 'support@ultrakeyit.com'}</p>
+                    {docDetails.business_info?.extraInfo || settings?.business_info?.extraInfo ? (
+                      <div dangerouslySetInnerHTML={{ __html: docDetails.business_info?.extraInfo || settings?.business_info?.extraInfo || '' }} />
+                    ) : (
+                      <p><b>GST No:</b> 36AADCU5062A1ZO</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* To Address */}
+                <div className="invoice-address-block">
+                  <div className="invoice-address-header">To:</div>
+                  <div className="invoice-address-body">
+                    <p><b>{docDetails.client_name}</b></p>
+                    {docDetails.billing_address?.street ? (
+                      <>
+                        <p>{docDetails.billing_address.street}</p>
+                        <p>{docDetails.billing_address.city}, {docDetails.billing_address.state} {docDetails.billing_address.zip}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p>Flat No. 204, 2nd Floor, Cyber Residency,</p>
+                        <p>Inidra Nagar, Gachibowli,</p>
+                        <p>Hyderabad, Telangana, India-500032</p>
+                      </>
+                    )}
+                    <p>{docDetails.client_email}</p>
+                    {docDetails.client_extra_info ? (
+                      <div dangerouslySetInnerHTML={{ __html: docDetails.client_extra_info }} />
+                    ) : (
+                      <p><b>GST No:</b> 36AADCU5062A1ZO</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Invoice metadata and payment terms */}
+              <div className="invoice-right-col">
+                <div className="invoice-meta-list">
+                  <span><b>Invoice Number</b></span>
+                  <span>{docDetails.document_number}</span>
+                  
+                  <span><b>Invoice Date</b></span>
+                  <span>{new Date(docDetails.created_at).toLocaleDateString()}</span>
+                  
+                  <span><b>Due Date</b></span>
+                  <span>{new Date(docDetails.due_date).toLocaleDateString()}</span>
+                </div>
+
+                <div className="invoice-total-due-banner">
+                  <span>TOTAL DUE</span>
+                  <span>{currencySymbol}{parseFloat(docDetails.total_due).toFixed(2)}</span>
+                </div>
+
+                <div className="invoice-payment-terms">
+                  {docDetails.type === 'quote'
+                    ? (docDetails.invoice_config?.quote?.termsAndConditions || settings?.invoice_config?.quote?.termsAndConditions || 'Quotation valid for 30 days.')
+                    : (docDetails.invoice_config?.invoice?.termsAndConditions || settings?.invoice_config?.invoice?.termsAndConditions || 'Payment is due within 14 days from date of invoice. Late payment is subject to fees of 5% per month.')}
+                </div>
+
+                <div className="invoice-payment-methods">
+                  <h4>Payment Methods:</h4>
+                  <ol>
+                    <li>60% Advance Payment</li>
+                    <li>Remaining 40% Final Settlement</li>
+                  </ol>
                 </div>
               </div>
             </div>
 
-            {/* Billed To */}
-            <div style={{ marginBottom: '2.5rem' }}>
-              <h4 style={{ textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em', color: '#888', marginBottom: '0.5rem' }}>Billed To:</h4>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#111', marginBottom: '0.25rem' }}>{docDetails.client_name}</h3>
-              <p style={{ fontSize: '0.85rem', color: '#555', margin: 0 }}>{docDetails.client_email}</p>
-              {docDetails.billing_address?.street && (
-                <p style={{ fontSize: '0.85rem', color: '#555', marginTop: '0.25rem' }}>
-                  {docDetails.billing_address.street}, {docDetails.billing_address.city}, {docDetails.billing_address.state} {docDetails.billing_address.zip}
-                </p>
-              )}
-              {docDetails.client_extra_info && (
-                <div style={{ fontSize: '0.85rem', color: '#555', marginTop: '0.25rem' }}
-                  dangerouslySetInnerHTML={{ __html: docDetails.client_extra_info }} />
-              )}
-            </div>
-
             {/* Line Items Table */}
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '2.5rem' }}>
+            <table className="invoice-table">
               <thead>
-                <tr style={{ borderBottom: '2px solid #222' }}>
-                  <th style={{ padding: '0.75rem 0', textAlign: 'left', fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', color: '#222' }}>Description</th>
-                  <th style={{ padding: '0.75rem 0', textAlign: 'center', fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', color: '#222', width: '80px' }}>Qty</th>
-                  <th style={{ padding: '0.75rem 0', textAlign: 'right', fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', color: '#222', width: '120px' }}>Rate</th>
-                  {docDetails.lines?.some(l => parseFloat(l.adjust) !== 0) && (
-                    <th style={{ padding: '0.75rem 0', textAlign: 'right', fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', color: '#222', width: '90px' }}>Adj.</th>
-                  )}
-                  <th style={{ padding: '0.75rem 0', textAlign: 'right', fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', color: '#222', width: '120px' }}>Amount</th>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>HRS/QTY</th>
+                  <th style={{ textAlign: 'left' }}>SERVICE DETAILS</th>
+                  <th style={{ textAlign: 'right' }}>RATE/PRICE</th>
+                  <th style={{ textAlign: 'right' }}>SUB TOTAL</th>
                 </tr>
               </thead>
               <tbody>
                 {docDetails.lines?.map((line, index) => (
-                  <tr key={index} style={{ borderBottom: '1px solid #eaeaea' }}>
-                    <td style={{ padding: '1rem 0' }}>
-                      <span style={{ fontSize: '0.95rem', fontWeight: 600, color: '#111', display: 'block' }}>{line.description}</span>
-                      {line.vendor_name && <span style={{ fontSize: '0.75rem', color: '#777' }}>Fulfilled by: {line.vendor_name}</span>}
+                  <tr key={index}>
+                    <td style={{ textAlign: 'left', verticalAlign: 'top' }}>{parseFloat(line.quantity)}</td>
+                    <td style={{ textAlign: 'left', verticalAlign: 'top' }}>
+                      <span className="invoice-item-desc">{line.description}</span>
+                      <span className="invoice-item-subdesc">{line.description}</span>
+                      {line.vendor_name && (
+                        <span className="invoice-item-subdesc" style={{ marginTop: '0.25rem' }}>
+                          Fulfilled by: {line.vendor_name}
+                          {line.vendor_cost !== null && line.vendor_cost !== undefined && ` (Cost: ${currencySymbol}${parseFloat(line.vendor_cost).toFixed(2)})`}
+                        </span>
+                      )}
                     </td>
-                    <td style={{ padding: '1rem 0', textAlign: 'center', fontSize: '0.95rem', color: '#333' }}>{line.quantity}</td>
-                    <td style={{ padding: '1rem 0', textAlign: 'right', fontSize: '0.95rem', color: '#333' }}>{currencySymbol}{parseFloat(line.unit_price).toFixed(2)}</td>
-                    {docDetails.lines?.some(l => parseFloat(l.adjust) !== 0) && (
-                      <td style={{ padding: '1rem 0', textAlign: 'right', fontSize: '0.85rem', color: parseFloat(line.adjust) < 0 ? '#e74c3c' : '#27ae60' }}>
-                        {parseFloat(line.adjust) !== 0 ? `${parseFloat(line.adjust) > 0 ? '+' : ''}${currencySymbol}${parseFloat(line.adjust).toFixed(2)}` : '—'}
-                      </td>
-                    )}
-                    <td style={{ padding: '1rem 0', textAlign: 'right', fontSize: '0.95rem', fontWeight: 600, color: '#111' }}>{currencySymbol}{parseFloat(line.amount).toFixed(2)}</td>
+                    <td style={{ textAlign: 'right', verticalAlign: 'top' }}>{currencySymbol}{parseFloat(line.unit_price).toFixed(2)}</td>
+                    <td style={{ textAlign: 'right', verticalAlign: 'top', fontWeight: 600 }}>{currencySymbol}{parseFloat(line.amount).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            {/* Totals Summary */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '3rem' }}>
-              <div style={{ width: '280px', fontSize: '0.9rem', color: '#333' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0' }}>
-                  <span>Subtotal:</span>
-                  <span>{currencySymbol}{parseFloat(docDetails.sub_total).toFixed(2)}</span>
-                </div>
-                {parseFloat(docDetails.discount_amount || 0) > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', color: '#e74c3c' }}>
-                    <span>Discount:</span>
-                    <span>−{currencySymbol}{parseFloat(docDetails.discount_amount).toFixed(2)}</span>
+            {/* Bottom section: Bank details and totals */}
+            <div className="invoice-bottom-section">
+              {/* Left Column: Bank and payment instructions */}
+              {(() => {
+                const pConfig = docDetails.payments_config || settings?.payments_config || {};
+                const bankDetailsText = pConfig.bankDetails;
+                const bankName = pConfig.bankName;
+                const bankAccountNumber = pConfig.bankAccountNumber;
+                const bankAccountName = pConfig.bankAccountName;
+                const bankIfsc = pConfig.bankIfsc;
+                const bankBranch = pConfig.bankBranch;
+                const gpayNumber = pConfig.gpayNumber;
+                const upiId = pConfig.upiId;
+
+                const hasBankDetails = !!(bankName || bankAccountNumber || bankAccountName || bankIfsc || bankBranch);
+                const hasGPay = !!gpayNumber;
+                const hasUpi = !!upiId;
+
+                if (!hasBankDetails && !hasGPay && !hasUpi && !bankDetailsText) {
+                  return (
+                    <div className="invoice-bank-details-box">
+                      <h4>Payment Instructions</h4>
+                      <p style={{ color: '#64748b', margin: 0 }}>No payment instructions configured.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="invoice-bank-details-box">
+                    <h4>Pay Invoice amount via one of the options mentioned below</h4>
+                    
+                    {hasGPay && (
+                      <div className="invoice-bank-option" style={{ marginBottom: '1rem' }}>
+                        <div className="invoice-bank-option-title">Option 1: Gpay (or) Phonepe Number:</div>
+                        <div style={{ fontWeight: 600, color: '#1e293b' }}>{gpayNumber}</div>
+                      </div>
+                    )}
+
+                    {hasBankDetails && (
+                      <div className="invoice-bank-option" style={{ marginBottom: '1rem' }}>
+                        <div className="invoice-bank-option-title">Option 2: Direct To Organization Current A/C</div>
+                        <div className="invoice-bank-details-grid">
+                          {bankAccountNumber && (
+                            <>
+                              <span style={{ color: '#475569', fontWeight: 500 }}>Account Number:</span>
+                              <span style={{ fontWeight: 600, color: '#1e293b' }}>{bankAccountNumber}</span>
+                            </>
+                          )}
+                          {bankAccountName && (
+                            <>
+                              <span style={{ color: '#475569', fontWeight: 500 }}>Name:</span>
+                              <span style={{ fontWeight: 600, color: '#1e293b' }}>{bankAccountName}</span>
+                            </>
+                          )}
+                          {bankName && (
+                            <>
+                              <span style={{ color: '#475569', fontWeight: 500 }}>Bank Name:</span>
+                              <span style={{ fontWeight: 600, color: '#1e293b' }}>{bankName}</span>
+                            </>
+                          )}
+                          {bankIfsc && (
+                            <>
+                              <span style={{ color: '#475569', fontWeight: 500 }}>IFSC:</span>
+                              <span style={{ fontWeight: 600, color: '#1e293b' }}>{bankIfsc}</span>
+                            </>
+                          )}
+                          {bankBranch && (
+                            <>
+                              <span style={{ color: '#475569', fontWeight: 500 }}>Branch:</span>
+                              <span style={{ fontWeight: 600, color: '#1e293b' }}>{bankBranch}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {hasUpi && (
+                      <div className="invoice-bank-option" style={{ marginBottom: '1rem' }}>
+                        <div className="invoice-bank-option-title">Option 3: Pay via UPI ID</div>
+                        <div style={{ fontWeight: 600, color: '#1e293b' }}>{upiId}</div>
+                      </div>
+                    )}
+
+                    {bankDetailsText && (
+                      <div className="invoice-bank-option" style={{ borderTop: '1px solid #cbd5e1', paddingTop: '0.75rem', marginTop: '0.75rem' }}>
+                        <div className="invoice-bank-option-title" style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: '#475569', marginBottom: '0.25rem' }}>Additional Notes:</div>
+                        <div style={{ whiteSpace: 'pre-wrap', color: '#475569' }}>{bankDetailsText}</div>
+                      </div>
+                    )}
                   </div>
-                )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #eaeaea' }}>
-                  <span>{docDetails.tax_config?.defaultTaxName || 'GST'} ({docDetails.tax_config?.defaultTaxPercentage || 18}%):</span>
-                  <span>{currencySymbol}{parseFloat(docDetails.tax_amount).toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0', fontSize: '1.15rem', fontWeight: 800, color: '#111' }}>
-                  <span>Total Due:</span>
-                  <span>{currencySymbol}{parseFloat(docDetails.total_due).toFixed(2)}</span>
-                </div>
-              </div>
+                );
+              })()}
+
+              {/* Right Column: Summary totals */}
+              {(() => {
+                const subTotal = parseFloat(docDetails.sub_total);
+                const discount = parseFloat(docDetails.discount_amount || 0);
+                const tax = parseFloat(docDetails.tax_amount);
+                const convenienceFeeEnabled = docDetails.convenience_fee_enabled === true;
+                const surcharge = parseFloat(docDetails.convenience_fee_amount || 0);
+                const surchargeTax = parseFloat(docDetails.convenience_fee_tax_amount || 0);
+                const originalTotal = parseFloat(docDetails.total_due);
+                const finalTotal = originalTotal + surcharge + surchargeTax;
+
+                const paidAmount = docDetails.status === 'paid' ? finalTotal : 0;
+                const remainingDue = docDetails.status === 'paid' ? 0 : finalTotal;
+
+                return (
+                  <div className="invoice-totals-box">
+                    <div className="invoice-totals-row">
+                      <span>Sub Total</span>
+                      <span>{currencySymbol}{(subTotal + discount).toFixed(2)}</span>
+                    </div>
+                    {discount > 0 && (
+                      <div className="invoice-totals-row discount">
+                        <span>Discount</span>
+                        <span>{currencySymbol}{discount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="invoice-totals-row">
+                      <span>{docDetails.tax_config?.defaultTaxName || 'GST'} ({docDetails.tax_config?.defaultTaxPercentage || 18}%)</span>
+                      <span>{currencySymbol}{tax.toFixed(2)}</span>
+                    </div>
+                    {convenienceFeeEnabled && (
+                      <>
+                        <div className="invoice-totals-row">
+                          <span>Invoice Total</span>
+                          <span>{currencySymbol}{originalTotal.toFixed(2)}</span>
+                        </div>
+                        <div className="invoice-totals-row" style={{ color: 'var(--accent-warning)' }}>
+                          <span>Gateway Fee (2% + GST)</span>
+                          <span>{currencySymbol}{(surcharge + surchargeTax).toFixed(2)}</span>
+                        </div>
+                      </>
+                    )}
+                    <div className="invoice-totals-row bold-divider">
+                      <span>Paid</span>
+                      <span>{currencySymbol}{paidAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="invoice-totals-due-banner">
+                      <span>TOTAL DUE</span>
+                      <span>{currencySymbol}{remainingDue.toFixed(2)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
-            {/* Footer and Terms */}
-            <div style={{ borderTop: '2px solid #eaeaea', paddingTop: '1.5rem', fontSize: '0.75rem', color: '#666', lineHeight: '1.5' }}>
-              <h5 style={{ fontWeight: 700, textTransform: 'uppercase', color: '#222', marginBottom: '0.4rem' }}>Terms & Conditions:</h5>
-              <div dangerouslySetInnerHTML={{
-                __html: docDetails.type === 'quote'
-                  ? (docDetails.invoice_config?.quote?.termsAndConditions || settings?.invoice_config?.quote?.termsAndConditions || '')
-                  : (docDetails.invoice_config?.invoice?.termsAndConditions || settings?.invoice_config?.invoice?.termsAndConditions || '')
-              }} />
-              <div style={{ marginTop: '1.5rem', textAlign: 'center', color: '#888' }}>
-                <div dangerouslySetInnerHTML={{
-                  __html: docDetails.type === 'quote'
-                    ? (docDetails.invoice_config?.quote?.footerNotes || settings?.invoice_config?.quote?.footerNotes || '')
-                    : (docDetails.invoice_config?.invoice?.footerNotes || settings?.invoice_config?.invoice?.footerNotes || '')
-                }} />
-              </div>
+            {/* Footer */}
+            <div className="invoice-footer-line">
+              Thanks for choosing {docDetails.business_info?.businessName || settings?.business_info?.businessName || 'Ultrakey IT Solutions Pvt. Ltd.'} | {docDetails.business_info?.email || settings?.business_info?.email || 'support@ultrakeyit.com'} | {docDetails.business_info?.website || settings?.business_info?.website || '+91 6300440316'}
             </div>
           </div>
         </div>
@@ -663,8 +798,8 @@ export const Documents = ({ initialView = 'list' }) => {
 
       {/* ==================== CLIENT QUICK-ADD MODAL ==================== */}
       {showClientModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="glass-card" style={{ width: '400px' }}>
+        <div className="modal-overlay">
+          <div className="glass-card modal-card" style={{ width: '400px' }}>
             <h3 style={{ fontSize: '1.25rem', marginBottom: '1.25rem' }}>Register New Client</h3>
             <form onSubmit={handleCreateClient}>
               <div className="form-group">
@@ -680,6 +815,77 @@ export const Documents = ({ initialView = 'list' }) => {
                 <button type="submit" className="btn btn-primary">Create Client</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* ==================== VERIFY PAYMENT MODAL ==================== */}
+      {verifyingDoc && (
+        <div className="modal-overlay">
+          <div className="glass-card modal-card" style={{ '--modal-width': '480px' }}>
+            <h3 style={{ fontSize: '1.25rem', marginBottom: '1.25rem', color: 'var(--accent-warning)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <ShieldCheck size={20} /> Verify Offline Payment
+            </h3>
+            
+            <div style={{ marginBottom: '1.5rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+              <p style={{ marginBottom: '0.75rem' }}>
+                Client <strong>{verifyingDoc.client_name}</strong> has submitted payment proof for document <strong>{verifyingDoc.document_number}</strong>.
+              </p>
+              
+              <div style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr' }}>
+                  <span style={{ fontWeight: 600 }}>Amount Due:</span>
+                  <span style={{ color: 'var(--accent-primary)', fontWeight: 700 }}>{currencySymbol}{parseFloat(verifyingDoc.total_due).toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr' }}>
+                  <span style={{ fontWeight: 600 }}>Method:</span>
+                  <span style={{ textTransform: 'uppercase' }}>{verifyingDoc.offline_payment_info?.method === 'bank_transfer' ? 'Bank Transfer' : verifyingDoc.offline_payment_info?.method || 'Unknown'}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr' }}>
+                  <span style={{ fontWeight: 600 }}>Reference UTR:</span>
+                  <span style={{ fontFamily: 'monospace', fontSize: '1rem', color: '#1e293b', fontWeight: 600 }}>{verifyingDoc.offline_payment_info?.reference || 'N/A'}</span>
+                </div>
+                {verifyingDoc.offline_payment_info?.notes && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr' }}>
+                    <span style={{ fontWeight: 600 }}>Notes:</span>
+                    <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>{verifyingDoc.offline_payment_info.notes}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                onClick={() => setVerifyingDoc(null)}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                style={{ color: 'var(--accent-danger)', borderColor: 'var(--accent-danger)', display: 'flex', alignItems: 'center', gap: '0.25rem' }} 
+                onClick={() => {
+                  handleStatusChange(verifyingDoc.id, 'sent');
+                  setVerifyingDoc(null);
+                }}
+                disabled={updatingStatus === verifyingDoc.id}
+              >
+                <X size={14} /> Reject
+              </button>
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                style={{ backgroundColor: 'var(--accent-success)', borderColor: 'var(--accent-success)', color: '#fff', display: 'flex', alignItems: 'center', gap: '0.25rem' }} 
+                onClick={() => {
+                  handleStatusChange(verifyingDoc.id, 'paid');
+                  setVerifyingDoc(null);
+                }}
+                disabled={updatingStatus === verifyingDoc.id}
+              >
+                <Check size={14} /> Approve & Mark Paid
+              </button>
+            </div>
           </div>
         </div>
       )}

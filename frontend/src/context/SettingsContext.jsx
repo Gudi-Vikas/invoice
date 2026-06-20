@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api from '../api';
 
 /**
@@ -81,4 +83,3 @@ export const useSettings = () => {
   return ctx;
 };
 
-export default SettingsContext;

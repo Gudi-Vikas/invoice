@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { runWithoutRLS } from '../config/db.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkey123!';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 /**
  * Issues a signed JWT scoped to a Master Admin identity.

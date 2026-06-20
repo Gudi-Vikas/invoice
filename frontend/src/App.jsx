@@ -1,8 +1,8 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { ToastProvider } from './context/ToastContext';
+import { ThemeProvider } from './context/ThemeContext';
 
 // Auth Pages
 import LoginPage from './components/auth/LoginPage';
@@ -17,6 +17,7 @@ import Documents from './components/Documents';
 import Vendors from './components/Vendors';
 import Settings from './components/Settings';
 import SubscriptionPage from './components/SubscriptionPage';
+import Team from './components/Team';
 
 // Client Portal (public, magic-link authenticated)
 import ClientPortal from './components/ClientPortal';
@@ -34,16 +35,17 @@ import MasterAdmins from './components/master/MasterAdmins';
  * Main Application Shell.
  *
  * Provider hierarchy:
- *   ToastProvider → AuthProvider → BrowserRouter → Routes
+ *   ThemeProvider → ToastProvider → AuthProvider → BrowserRouter → Routes
  *
  * SettingsProvider is nested inside TenantLayout because
  * settings are tenant-scoped and should only fetch when authenticated.
  */
 function App() {
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <BrowserRouter>
+    <ThemeProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <BrowserRouter>
           <Routes>
             {/* ── Public Auth Routes ──────────────────────────── */}
             <Route path="/login" element={<LoginPage />} />
@@ -64,9 +66,12 @@ function App() {
             >
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/clients" element={<Clients />} />
-              <Route path="/documents" element={<Documents initialView="list" />} />
-              <Route path="/documents/create" element={<Documents initialView="create" />} />
+              <Route path="/invoices" element={<Documents defaultType="invoice" initialView="list" />} />
+              <Route path="/invoices/create" element={<Documents defaultType="invoice" initialView="create" />} />
+              <Route path="/quotes" element={<Documents defaultType="quote" initialView="list" />} />
+              <Route path="/quotes/create" element={<Documents defaultType="quote" initialView="create" />} />
               <Route path="/vendors" element={<Vendors />} />
+              <Route path="/team" element={<Team />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/subscription" element={<SubscriptionPage />} />
             </Route>
@@ -94,6 +99,7 @@ function App() {
         </BrowserRouter>
       </AuthProvider>
     </ToastProvider>
+    </ThemeProvider>
   );
 }
 

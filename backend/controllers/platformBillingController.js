@@ -34,6 +34,30 @@ const generateInvoiceNumber = async (client) => {
   return `${prefix}-${seqStr}`;
 };
 
+export const createPlatformInvoice = async (client, { tenantId, planId, amount, taxPercentage = 18.00, razorpayOrderId, razorpayPaymentId, status = 'paid' }) => {
+  const invoiceNumber = await generateInvoiceNumber(client);
+  const now = new Date();
+  const billingPeriodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const billingPeriodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const planAmount = parseFloat(amount);
+  const taxPct = parseFloat(taxPercentage);
+  const taxAmount = parseFloat(((planAmount * taxPct) / 100).toFixed(4));
+  const totalAmount = parseFloat((planAmount + taxAmount).toFixed(4));
+
+  const insertRes = await client.query(
+    `INSERT INTO platform_billing_invoices
+       (tenant_id, plan_id, invoice_number, billing_period_start, billing_period_end,
+        amount, tax_percentage, tax_amount, total_amount, status, due_date, razorpay_order_id, razorpay_payment_id, paid_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+     RETURNING *`,
+    [
+      tenantId, planId, invoiceNumber, billingPeriodStart, billingPeriodEnd,
+      planAmount, taxPct, taxAmount, totalAmount, status, now, razorpayOrderId || null, razorpayPaymentId || null, status === 'paid' ? now : null
+    ]
+  );
+  return insertRes.rows[0];
+};
+
 // ─── Cursor Helpers for Pagination ─────────────────────────────────────────
 const encodeCursor = (createdAt, id) => {
   if (!createdAt || !id) return null;

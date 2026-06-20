@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from 'react';
 import api from '../../api';
 import { useToast } from '../../context/ToastContext';
 import {
-  Receipt, Plus, DollarSign, XCircle, CheckCircle, Eye, ArrowLeft
+  Receipt, Plus, DollarSign, XCircle, CheckCircle, Eye
 } from 'lucide-react';
 
 /**
@@ -13,6 +14,7 @@ export const MasterBilling = () => {
   const { showToast } = useToast();
 
   const [invoices, setInvoices] = useState([]);
+  const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showGenerate, setShowGenerate] = useState(false);
   const [showDetail, setShowDetail] = useState(null);
@@ -25,9 +27,16 @@ export const MasterBilling = () => {
     dueDate: '', amountOverride: '', notes: ''
   });
 
-  useEffect(() => { loadInvoices(); }, [statusFilter]);
+  const loadTenants = useCallback(async () => {
+    try {
+      const data = await api.masterListTenants({ limit: 100 });
+      setTenants(data.tenants || []);
+    } catch {
+      showToast('Failed to load tenant choices.', 'error');
+    }
+  }, [showToast]);
 
-  const loadInvoices = async (cursor) => {
+  const loadInvoices = useCallback(async (cursor) => {
     setLoading(true);
     try {
       const params = { limit: 20 };
@@ -41,12 +50,15 @@ export const MasterBilling = () => {
         setInvoices(data.invoices || []);
       }
       setNextCursor(data.pagination?.nextCursor || null);
-    } catch (err) {
+    } catch {
       showToast('Failed to load billing invoices.', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter, showToast]);
+
+  useEffect(() => { loadInvoices(); }, [loadInvoices]);
+  useEffect(() => { loadTenants(); }, [loadTenants]);
 
   const handleGenerate = async (e) => {
     e.preventDefault();
@@ -195,17 +207,21 @@ export const MasterBilling = () => {
 
       {/* Generate Modal */}
       {showGenerate && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-          <div className="glass-card" style={{ width: '520px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="modal-overlay">
+          <div className="glass-card modal-card" style={{ '--modal-width': '520px' }}>
             <h3 style={{ marginBottom: '1.25rem' }}><Plus size={16} style={{ verticalAlign: 'middle' }} /> Generate Billing Invoice</h3>
             <form onSubmit={handleGenerate}>
               <div className="form-group">
-                <label className="form-label">Tenant ID *</label>
-                <input type="text" className="form-input" required placeholder="Tenant UUID"
-                  value={genForm.tenantId} onChange={e => setGenForm(p => ({ ...p, tenantId: e.target.value }))} />
+                <label className="form-label">Tenant *</label>
+                <select className="form-select" required
+                  value={genForm.tenantId} onChange={e => setGenForm(p => ({ ...p, tenantId: e.target.value }))}>
+                  <option value="">Select tenant</option>
+                  {tenants.map((tenant) => (
+                    <option key={tenant.id} value={tenant.id}>
+                      {tenant.name}{tenant.domain ? ` (${tenant.domain})` : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div className="form-group">
@@ -245,11 +261,8 @@ export const MasterBilling = () => {
 
       {/* Detail Modal */}
       {showDetail && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-          <div className="glass-card" style={{ width: '520px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="modal-overlay">
+          <div className="glass-card modal-card" style={{ '--modal-width': '520px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h3>{showDetail.invoice_number}</h3>
               <button onClick={() => setShowDetail(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>

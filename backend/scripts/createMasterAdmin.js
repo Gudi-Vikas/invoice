@@ -29,14 +29,12 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-dotenv.config({ path: new URL('../../.env', import.meta.url).pathname });
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
+
 
 // ── Validate required env vars ────────────────────────────────────────────────
-const email    = (process.env.MASTER_ADMIN_EMAIL    || '').trim().toLowerCase();
-const password =  process.env.MASTER_ADMIN_PASSWORD || '';
+const email    = (process.env.MASTER_ADMIN_EMAIL    || 'vikas@gmail.com').trim().toLowerCase();
+const password =  process.env.MASTER_ADMIN_PASSWORD || 'admin123';
 
 if (!email) {
   console.error('❌  MASTER_ADMIN_EMAIL is not set in .env');
@@ -55,18 +53,29 @@ if (!emailRegex.test(email)) {
 }
 
 // ── Database Connection ───────────────────────────────────────────────────────
+
+
+dotenv.config();
+
+const { Pool } = pg;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const sslConfig = process.env.DATABASE_URL?.includes('aiven')
   ? {
-      ca: fs.readFileSync(path.join(__dirname, '../config/ca.pem')).toString(),
+      ca: fs.readFileSync(path.join(__dirname, 'ca.pem')).toString(),
       rejectUnauthorized: true,
     }
   : false;
 
-const pool = new pg.Pool({
-  connectionString:
-    process.env.DATABASE_URL ||
-    'postgresql://postgres:postgres@localhost:5432/invoice_db',
-  ssl: sslConfig
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/invoice_db',
+  ssl: sslConfig,
+});
+
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle database client:', err);
 });
 
 // ── Main ──────────────────────────────────────────────────────────────────────

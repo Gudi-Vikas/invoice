@@ -1,10 +1,10 @@
 import jwt from 'jsonwebtoken';
-import { runInTransaction } from '../config/db.js';
+import pool, { runInTransaction } from '../config/db.js';
 import { getNextDocumentNumber } from '../utils/sequence.js';
-import { postInvoiceLedger } from '../services/ledgerService.js';
+import { postInvoiceLedger, postPaymentLedger } from '../services/ledgerService.js';
 import razorpayService from '../services/razorpayService.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkey123!';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const verifyPortalToken = (token, expectedDocumentId, expectedType) => {
   const decoded = jwt.verify(token, JWT_SECRET);
@@ -45,7 +45,7 @@ export const portalController = {
       const details = await runInTransaction(tenantId, async (client) => {
         const docRes = await client.query(
           `SELECT d.*, c.name as client_name, c.email as client_email, c.billing_address,
-                  ts.business_info, ts.translations, ts.tax_config
+                  ts.business_info, ts.translations, ts.tax_config, ts.payments_config, ts.invoice_config
            FROM documents d
            JOIN clients c ON d.client_id = c.id
            JOIN tenant_settings ts ON d.tenant_id = ts.tenant_id
@@ -59,9 +59,10 @@ export const portalController = {
 
         const linesRes = await client.query(
           `SELECT dl.id, dl.quantity, dl.description, dl.unit_price, dl.adjust, dl.amount,
-                  dl.vendor_id, dl.sort_order, v.business_name as vendor_name
+                  dl.vendor_id, dl.vendor_cost, dl.sort_order, v.business_name as vendor_name, v.platform_fee_percentage
            FROM document_lines dl
            LEFT JOIN vendors v ON dl.vendor_id = v.id
+           LEFT JOIN linked_accounts la ON v.id = la.vendor_id
            WHERE dl.tenant_id = $1 AND dl.document_id = $2
            ORDER BY dl.sort_order ASC`,
           [tenantId, documentId]
@@ -205,6 +206,59 @@ export const portalController = {
   },
 
   /**
+   * 2b. Handles quote rejection/decline.
+   */
+  declineQuote: async (req, res, next) => {
+    const { id } = req.params;
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Magic link token is required.' });
+    }
+
+    try {
+      const decoded = verifyPortalToken(token, id, 'quote');
+      const { tenantId } = decoded;
+
+      const result = await runInTransaction(tenantId, async (client) => {
+        // Verify and lock the quotation
+        const quoteRes = await client.query(
+          `SELECT * FROM documents WHERE tenant_id = $1 AND id = $2 AND type = 'quote' FOR UPDATE`,
+          [tenantId, id]
+        );
+
+        if (quoteRes.rows.length === 0) {
+          throw new Error('Quotation not found.');
+        }
+
+        const quote = quoteRes.rows[0];
+        if (quote.status === 'accepted') {
+          throw new Error('Quotation has already been accepted.');
+        }
+        if (quote.status === 'declined') {
+          return { quote, status: 'already_declined' };
+        }
+
+        // Update quote status to declined
+        await client.query(
+          `UPDATE documents SET status = 'declined' WHERE tenant_id = $1 AND id = $2`,
+          [tenantId, id]
+        );
+        quote.status = 'declined';
+
+        return { quote, status: 'declined' };
+      });
+
+      return res.json({
+        message: 'Quotation declined successfully.',
+        data: result
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
    * 3. Prepares payment initialization.
    * Compiles split transfers for marketplace vendors and constructs a Razorpay Order.
    */
@@ -221,9 +275,12 @@ export const portalController = {
       const { tenantId } = decoded;
 
       const paymentDetails = await runInTransaction(tenantId, async (client) => {
-        // A. Fetch the invoice details
+        // A. Fetch the invoice details alongside settings
         const invoiceRes = await client.query(
-          `SELECT id, document_number, total_due, status FROM documents WHERE tenant_id = $1 AND id = $2 AND type = 'invoice'`,
+          `SELECT d.id, d.document_number, d.total_due, d.status, ts.payments_config
+           FROM documents d
+           JOIN tenant_settings ts ON d.tenant_id = ts.tenant_id
+           WHERE d.tenant_id = $1 AND d.id = $2 AND d.type = 'invoice'`,
           [tenantId, id]
         );
 
@@ -236,73 +293,159 @@ export const portalController = {
           throw new Error('Invoice has already been settled.');
         }
 
-        // B. Fetch line items to determine vendor components
-        const linesRes = await client.query(
-          `SELECT dl.*, la.razorpay_account_id, v.platform_fee_percentage, v.business_name
-           FROM document_lines dl
-           LEFT JOIN vendors v ON dl.vendor_id = v.id
-           LEFT JOIN linked_accounts la ON v.id = la.vendor_id
-           WHERE dl.tenant_id = $1 AND dl.document_id = $2`,
-          [tenantId, id]
-        );
+        const paymentsConfig = invoice.payments_config || {};
+        const passGatewayFees = paymentsConfig.passGatewayFees === true;
 
-        const transfers = [];
-        const pendingTransfersToRecord = [];
+        let finalPayableAmount = parseFloat(invoice.total_due);
+        let surcharge = 0;
+        let surchargeTax = 0;
 
-        // C. Parse splits for line items managed by third-party marketplace vendors
-        for (const line of linesRes.rows) {
-          if (line.vendor_id && line.razorpay_account_id) {
-            const lineAmount = parseFloat(line.amount);
-            const feePercent = parseFloat(line.platform_fee_percentage || 5.00);
-
-            const platformFee = lineAmount * (feePercent / 100);
-            const vendorShare = lineAmount - platformFee;
-
-            transfers.push({
-              razorpayAccountId: line.razorpay_account_id,
-              amount: vendorShare,
-              vendorId: line.vendor_id,
-              description: `Split share for line item: ${line.description}`
-            });
-
-            pendingTransfersToRecord.push({
-              linkedAccountIdQuery: `SELECT id FROM linked_accounts WHERE razorpay_account_id = $1 AND tenant_id = $2`,
-              razorpayAccountId: line.razorpay_account_id,
-              totalAmount: lineAmount,
-              vendorShare,
-              platformFee
-            });
-          }
+        if (passGatewayFees) {
+          const feeBase = finalPayableAmount * 0.02;
+          const feeTax = feeBase * 0.18;
+          surcharge = feeBase;
+          surchargeTax = feeTax;
+          finalPayableAmount = finalPayableAmount + feeBase + feeTax;
         }
 
-        // D. Create Razorpay order containing the routing transfers specification
-        const rzpOrder = await razorpayService.createOrderWithSplits(invoice.total_due, transfers);
+        let rzpOrder;
+        const isOAuthPayment = paymentsConfig.razorpayConnected === true && paymentsConfig.razorpayAccessToken;
 
-        // Update the invoice document with the Razorpay order ID
-        await client.query(
-          `UPDATE documents SET razorpay_order_id = $1 WHERE tenant_id = $2 AND id = $3`,
-          [rzpOrder.id, tenantId, id]
-        );
+        if (isOAuthPayment) {
+          // A1. OAuth Direct Payment: Create a plain order on the tenant's connected merchant account
+          const amountInPaise = Math.round(finalPayableAmount * 100);
+          if (razorpayService.isMockMode) {
+            rzpOrder = {
+              id: `order_oauth_${Math.random().toString(36).substring(7)}`,
+              amount: amountInPaise,
+              currency: 'INR',
+              status: 'created'
+            };
+          } else {
+            // Direct REST call to Razorpay API on behalf of the tenant
+            const response = await fetch('https://api.razorpay.com/v1/orders', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${paymentsConfig.razorpayAccessToken}`
+              },
+              body: JSON.stringify({
+                amount: amountInPaise,
+                currency: 'INR',
+                receipt: invoice.document_number
+              })
+            });
+            if (!response.ok) {
+              const errText = await response.text();
+              throw new Error(`Razorpay direct order creation failed: ${errText}`);
+            }
+            rzpOrder = await response.json();
+          }
 
-        // E. Save pending transfer records for asynchronous webhook reconciliation
-        for (const pt of pendingTransfersToRecord) {
-          const laQuery = await client.query(pt.linkedAccountIdQuery, [pt.razorpayAccountId, tenantId]);
-          const linkedAccountId = laQuery.rows[0]?.id;
+          // Update the invoice document with the Razorpay order ID and surcharge details
+          await client.query(
+            `UPDATE documents 
+             SET razorpay_order_id = $1, 
+                 convenience_fee_enabled = $4, 
+                 convenience_fee_amount = $5, 
+                 convenience_fee_tax_amount = $6 
+             WHERE tenant_id = $2 AND id = $3`,
+            [rzpOrder.id, tenantId, id, passGatewayFees, surcharge, surchargeTax]
+          );
+        } else {
+          // Route-based payments (Platform admin account splits payments to marketplace vendors)
+          // B. Fetch line items to determine vendor components
+          const linesRes = await client.query(
+            `SELECT dl.*, la.razorpay_account_id, v.platform_fee_percentage, v.business_name, v.pan_verified
+             FROM document_lines dl
+             LEFT JOIN vendors v ON dl.vendor_id = v.id
+             LEFT JOIN linked_accounts la ON v.id = la.vendor_id
+             WHERE dl.tenant_id = $1 AND dl.document_id = $2`,
+            [tenantId, id]
+          );
 
-          if (linkedAccountId) {
-            await client.query(
-              `INSERT INTO transfers (invoice_id, linked_account_id, tenant_id, total_amount, vendor_share, platform_fee, status)
-               VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
-              [invoice.id, linkedAccountId, tenantId, pt.totalAmount, pt.vendorShare, pt.platformFee]
-            );
+          const transfers = [];
+          const pendingTransfersToRecord = [];
+
+          // C. Parse splits for line items managed by third-party marketplace vendors
+          for (const line of linesRes.rows) {
+            if (line.vendor_id && line.razorpay_account_id) {
+              const lineAmount = parseFloat(line.amount);
+              let vendorGross = 0;
+              let platformFee = 0;
+
+              if (line.vendor_cost !== null && line.vendor_cost !== undefined) {
+                vendorGross = parseFloat(line.vendor_cost) * parseFloat(line.quantity || 1);
+                platformFee = lineAmount - vendorGross;
+              } else {
+                const feePercent = parseFloat(line.platform_fee_percentage || 5.00);
+                platformFee = lineAmount * (feePercent / 100);
+                vendorGross = lineAmount - platformFee;
+              }
+              
+              const tdsRate = line.pan_verified ? 0.001 : 0.05;
+              const tdsAmount = vendorGross * tdsRate;
+              const vendorNetTransfer = vendorGross - tdsAmount;
+
+              transfers.push({
+                razorpayAccountId: line.razorpay_account_id,
+                amount: vendorNetTransfer,
+                vendorId: line.vendor_id,
+                description: `Split share for line item: ${line.description}`,
+                on_hold: true,
+                notes: {
+                  vendor_name: line.business_name || 'Vendor',
+                  tds_deducted_inr: parseFloat(tdsAmount.toFixed(4))
+                }
+              });
+
+              pendingTransfersToRecord.push({
+                linkedAccountIdQuery: `SELECT id FROM linked_accounts WHERE razorpay_account_id = $1 AND tenant_id = $2`,
+                razorpayAccountId: line.razorpay_account_id,
+                totalAmount: lineAmount,
+                vendorShare: vendorNetTransfer,
+                platformFee
+              });
+            }
+          }
+
+          // D. Create Razorpay order containing the routing transfers specification
+          rzpOrder = await razorpayService.createOrderWithSplits(finalPayableAmount, transfers);
+
+          // Update the invoice document with the Razorpay order ID and convenience fee specifics
+          await client.query(
+            `UPDATE documents 
+             SET razorpay_order_id = $1, 
+                 convenience_fee_enabled = $4, 
+                 convenience_fee_amount = $5, 
+                 convenience_fee_tax_amount = $6 
+             WHERE tenant_id = $2 AND id = $3`,
+            [rzpOrder.id, tenantId, id, passGatewayFees, surcharge, surchargeTax]
+          );
+
+          // E. Save pending transfer records for asynchronous webhook reconciliation
+          for (const pt of pendingTransfersToRecord) {
+            const laQuery = await client.query(pt.linkedAccountIdQuery, [pt.razorpayAccountId, tenantId]);
+            const linkedAccountId = laQuery.rows[0]?.id;
+
+            if (linkedAccountId) {
+              await client.query(
+                `INSERT INTO transfers (invoice_id, linked_account_id, tenant_id, total_amount, vendor_share, platform_fee, status)
+                 VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
+                [invoice.id, linkedAccountId, tenantId, pt.totalAmount, pt.vendorShare, pt.platformFee]
+              );
+            }
           }
         }
 
         return {
           orderId: rzpOrder.id,
-          amount: invoice.total_due,
+          amount: finalPayableAmount,
+          surcharge: surcharge,
           currency: 'INR',
-          documentNumber: invoice.document_number
+          documentNumber: invoice.document_number,
+          keyId: isOAuthPayment ? paymentsConfig.razorpayKeyId : (process.env.RAZORPAY_KEY_ID || 'rzp_test_mockkey'),
+          mockMode: razorpayService.isMockMode
         };
       });
 
@@ -345,6 +488,77 @@ export const portalController = {
               })
             });
             console.log(`[Mock Webhook] Dispatched order.paid background hook successfully for order: ${paymentDetails.orderId}`);
+
+            // Delay split and settlement events to mimic real-life delays
+            setTimeout(async () => {
+              try {
+                const transfersRes = await pool.query(
+                  `SELECT t.vendor_share, la.razorpay_account_id
+                   FROM transfers t
+                   JOIN linked_accounts la ON t.linked_account_id = la.id
+                   WHERE t.invoice_id = $1`,
+                  [id]
+                );
+
+                for (const row of transfersRes.rows) {
+                  const transferEventId = `evt_trsf_${Math.random().toString(36).substring(7)}`;
+                  await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'x-razorpay-signature': 'mock_sig_123'
+                    },
+                    body: JSON.stringify({
+                      id: transferEventId,
+                      event: 'transfer.processed',
+                      payload: {
+                        transfer: {
+                          entity: {
+                            id: `trsf_${Math.random().toString(36).substring(7)}`,
+                            recipient: row.razorpay_account_id,
+                            amount: Math.round(parseFloat(row.vendor_share) * 100)
+                          }
+                        }
+                      }
+                    })
+                  });
+                  console.log(`[Mock Webhook] Dispatched transfer.processed background hook for recipient: ${row.razorpay_account_id}`);
+                }
+
+                // Fire settlement.processed after transfers are processed
+                setTimeout(async () => {
+                  try {
+                    const settlementEventId = `evt_setl_${Math.random().toString(36).substring(7)}`;
+                    await fetch(webhookUrl, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'x-razorpay-signature': 'mock_sig_123'
+                      },
+                      body: JSON.stringify({
+                        id: settlementEventId,
+                        event: 'settlement.processed',
+                        payload: {
+                          settlement: {
+                            entity: {
+                              id: `setl_${Math.random().toString(36).substring(7)}`,
+                              amount: amountInPaise
+                            }
+                          }
+                        }
+                      })
+                    });
+                    console.log(`[Mock Webhook] Dispatched settlement.processed background hook successfully.`);
+                  } catch (err) {
+                    console.error('[Mock Webhook] Error triggering settlement webhook:', err.message);
+                  }
+                }, 1000);
+
+              } catch (err) {
+                console.error('[Mock Webhook] Error triggering transfer webhooks:', err.message);
+              }
+            }, 1000);
+
           } catch (err) {
             console.error('[Mock Webhook] Error triggering local webhook:', err.message);
           }
@@ -354,6 +568,152 @@ export const portalController = {
       return res.json({
         message: 'Payment order prepared.',
         data: paymentDetails
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  verifyPayment: async (req, res, next) => {
+    const { id } = req.params;
+    const { token, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    if (!token || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ error: 'Payment verification payload is incomplete.' });
+    }
+
+    try {
+      const decoded = verifyPortalToken(token, id, 'invoice');
+      const { tenantId } = decoded;
+
+      const isValid = razorpayService.verifyPaymentSignature({
+        orderId: razorpay_order_id,
+        paymentId: razorpay_payment_id,
+        signature: razorpay_signature
+      });
+
+      if (!isValid) {
+        return res.status(400).json({ error: 'Payment signature verification failed.' });
+      }
+
+      const result = await runInTransaction(tenantId, async (client) => {
+        // A. Verify and lock the invoice alongside settings
+        const docRes = await client.query(
+          `SELECT d.id, d.document_number, d.sub_total, d.tax_amount, d.total_due, d.status, ts.payments_config,
+                  d.convenience_fee_amount, d.convenience_fee_tax_amount
+           FROM documents d
+           JOIN tenant_settings ts ON d.tenant_id = ts.tenant_id
+           WHERE d.tenant_id = $1 AND d.id = $2 AND d.type = 'invoice' FOR UPDATE`,
+          [tenantId, id]
+        );
+
+        if (docRes.rows.length === 0) {
+          throw new Error('Invoice not found.');
+        }
+
+        const invoice = docRes.rows[0];
+        if (invoice.status === 'paid') {
+          return invoice;
+        }
+
+        // B. Update status to paid and save payment ID
+        await client.query(
+          `UPDATE documents 
+           SET status = 'paid', razorpay_payment_id = $1 
+           WHERE id = $2`,
+          [razorpay_payment_id, id]
+        );
+
+        // C. Record double-entry ledger inputs for the payment (estimate 2% fee, pass invoice UUID reference)
+        const paymentsConfig = invoice.payments_config || {};
+        const passGatewayFees = paymentsConfig.passGatewayFees === true;
+
+        let totalPaidRupees = parseFloat(invoice.total_due);
+        let gatewayFeeRupees = totalPaidRupees * 0.02;
+
+        if (passGatewayFees) {
+          totalPaidRupees = parseFloat(invoice.total_due) + parseFloat(invoice.convenience_fee_amount) + parseFloat(invoice.convenience_fee_tax_amount);
+          // When passing gateway fees, the fee charged by razorpay is precisely the sum of these variables
+          gatewayFeeRupees = parseFloat(invoice.convenience_fee_amount) + parseFloat(invoice.convenience_fee_tax_amount);
+        }
+
+        await postPaymentLedger(
+          client, 
+          tenantId, 
+          invoice.document_number, 
+          totalPaidRupees, 
+          gatewayFeeRupees, 
+          id,
+          parseFloat(invoice.convenience_fee_amount || 0),
+          parseFloat(invoice.convenience_fee_tax_amount || 0),
+          parseFloat(invoice.total_due)
+        );
+
+        return { ...invoice, status: 'paid' };
+      });
+
+      return res.json({
+        message: 'Payment verified and invoice marked as paid.',
+        data: result
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * Submits offline payment details (UTR reference, notes, method) from the Client Portal.
+   * Transitions invoice to 'pending_verification' status.
+   */
+  verifyOfflinePayment: async (req, res, next) => {
+    const { id } = req.params;
+    const { token, paymentMethod, transactionReference, notes } = req.body;
+
+    if (!token || !paymentMethod || !transactionReference) {
+      return res.status(400).json({ error: 'Magic access token, payment method, and transaction reference are required.' });
+    }
+
+    try {
+      const decoded = verifyPortalToken(token, id, 'invoice');
+      const { tenantId } = decoded;
+
+      const result = await runInTransaction(tenantId, async (client) => {
+        // Fetch matching document details
+        const docRes = await client.query(
+          `SELECT id, status, document_number FROM documents WHERE tenant_id = $1 AND id = $2 AND type = 'invoice'`,
+          [tenantId, id]
+        );
+
+        if (docRes.rows.length === 0) {
+          throw new Error('Invoice not found.');
+        }
+
+        const invoice = docRes.rows[0];
+        if (invoice.status === 'paid') {
+          throw new Error('Invoice has already been settled.');
+        }
+
+        const offlineInfo = {
+          method: paymentMethod,
+          reference: transactionReference,
+          notes: notes || '',
+          submittedAt: new Date().toISOString()
+        };
+
+        // Update document status to pending_verification and save offline payment details
+        await client.query(
+          `UPDATE documents 
+           SET status = 'pending_verification', offline_payment_info = $1 
+           WHERE id = $2`,
+          [offlineInfo, id]
+        );
+
+        return { ...invoice, status: 'pending_verification', offline_payment_info: offlineInfo };
+      });
+
+      return res.json({
+        message: 'Offline payment details submitted for verification successfully.',
+        data: result
       });
     } catch (err) {
       next(err);

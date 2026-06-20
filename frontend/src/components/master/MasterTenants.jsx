@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { useToast } from '../../context/ToastContext';
@@ -17,9 +18,7 @@ export const MasterTenants = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  useEffect(() => { loadTenants(); }, [pagination.page, statusFilter]);
-
-  const loadTenants = async () => {
+  const loadTenants = useCallback(async () => {
     setLoading(true);
     try {
       const params = { page: pagination.page, limit: 20 };
@@ -29,12 +28,14 @@ export const MasterTenants = () => {
       const data = await api.masterListTenants(params);
       setTenants(data.tenants || []);
       setPagination(prev => ({ ...prev, totalPages: data.pagination?.totalPages || 1, total: data.pagination?.total || 0 }));
-    } catch (err) {
+    } catch {
       showToast('Failed to load tenants.', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [pagination.page, statusFilter, search, showToast]);
+
+  useEffect(() => { loadTenants(); }, [loadTenants]);
 
   const handleSearch = (e) => {
     e.preventDefault();

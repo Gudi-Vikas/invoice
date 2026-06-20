@@ -25,4 +25,7 @@ router.post('/create-tenant', authenticateToken, authController.createTenant);
 // Create a one-time invite token for a given email + role
 router.post('/invite', authenticateToken, requireTenant, checkRole(['admin']), authController.invite);
 
+// Get list of all users in the active tenant workspace
+router.get('/users', authenticateToken, requireTenant, authController.listUsers);
+
 export default router;

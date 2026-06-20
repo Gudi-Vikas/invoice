@@ -20,6 +20,8 @@ if (!isMockMode) {
  * Razorpay Integration Service with Mock Fallback for Local Development.
  */
 export const razorpayService = {
+  isMockMode,
+
   /**
    * 1. Creates a Linked Account for a vendor via Razorpay Onboarding Route APIs.
    * See Razorpay Route Account creation flow.
@@ -153,9 +155,11 @@ export const razorpayService = {
       account: t.razorpayAccountId,
       amount: Math.round(parseFloat(t.amount) * 100),
       currency: 'INR',
+      on_hold: t.on_hold,
       notes: {
         vendor_id: t.vendorId,
-        invoice_item_desc: t.description || 'Split share'
+        invoice_item_desc: t.description || 'Split share',
+        ...t.notes
       }
     }));
 
@@ -181,6 +185,48 @@ export const razorpayService = {
       console.error('Razorpay order splits creation error:', err);
       throw err;
     }
+  },
+
+  /**
+   * Creates a plain Razorpay order for Ultrakey platform subscription billing.
+   */
+  createOrder: async ({ amountInRupees, receipt, notes = {} }) => {
+    const amountInPaise = Math.round(parseFloat(amountInRupees) * 100);
+
+    if (isMockMode) {
+      return {
+        id: `order_${crypto.randomBytes(8).toString('hex')}`,
+        amount: amountInPaise,
+        currency: 'INR',
+        receipt,
+        status: 'created',
+        notes
+      };
+    }
+
+    try {
+      return await razorpayClient.orders.create({
+        amount: amountInPaise,
+        currency: 'INR',
+        receipt,
+        notes
+      });
+    } catch (err) {
+      console.error('Razorpay order creation error:', err);
+      throw err;
+    }
+  },
+
+  verifyPaymentSignature: ({ orderId, paymentId, signature }) => {
+    if (isMockMode) return true;
+    if (!orderId || !paymentId || !signature) return false;
+
+    const expectedSignature = crypto
+      .createHmac('sha256', keySecret)
+      .update(`${orderId}|${paymentId}`)
+      .digest('hex');
+
+    return expectedSignature === signature;
   },
 
   /**
@@ -230,6 +276,82 @@ export const razorpayService = {
     } catch (err) {
       console.error('Webhook signature verification failure:', err);
       return false;
+    }
+  },
+
+  /**
+   * 8. Exchanges Razorpay OAuth authorization code for access tokens.
+   */
+  exchangeOAuthCode: async (code, redirectUri) => {
+    console.log(`[Razorpay Service] Exchanging OAuth authorization code: ${code}`);
+    if (isMockMode) {
+      const mockAccountId = `acc_oauth_${crypto.randomBytes(8).toString('hex')}`;
+      return {
+        access_token: `mock_access_token_${crypto.randomBytes(8).toString('hex')}`,
+        razorpay_account_id: mockAccountId,
+        status: 'active'
+      };
+    }
+
+    try {
+      const response = await fetch('https://auth.razorpay.com/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          client_id: keyId,
+          client_secret: keySecret,
+          grant_type: 'authorization_code',
+          redirect_uri: redirectUri,
+          code: code
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Razorpay OAuth token exchange failed: ${errText}`);
+      }
+
+      const data = await response.json();
+      return {
+        access_token: data.access_token,
+        razorpay_account_id: data.razorpay_user_id || data.account_id,
+        status: 'active'
+      };
+    } catch (err) {
+      console.error('Razorpay OAuth exchange error:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * 9. Creates a direct transfer from the merchant's account balance to a linked account.
+   */
+  createDirectTransfer: async (accountId, amountInRupees) => {
+    const amountInPaise = Math.round(parseFloat(amountInRupees) * 100);
+    console.log(`[Razorpay Service] Creating direct transfer of ${amountInRupees} INR (${amountInPaise} paise) to account: ${accountId}`);
+
+    if (isMockMode) {
+      return {
+        id: `trsf_${crypto.randomBytes(8).toString('hex')}`,
+        account: accountId,
+        amount: amountInPaise,
+        currency: 'INR',
+        status: 'processed'
+      };
+    }
+
+    try {
+      const response = await razorpayClient.transfers.create({
+        account: accountId,
+        amount: amountInPaise,
+        currency: 'INR'
+      });
+      return response;
+    } catch (err) {
+      console.error('Razorpay direct transfer error:', err);
+      throw err;
     }
   }
 };

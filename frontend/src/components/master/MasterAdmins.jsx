@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from 'react';
 import api from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -15,18 +16,18 @@ export const MasterAdmins = () => {
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { loadAdmins(); }, []);
-
-  const loadAdmins = async () => {
+  const loadAdmins = useCallback(async () => {
     try {
       const data = await api.masterListAdmins();
       setAdmins(data.admins || []);
-    } catch (err) {
+    } catch {
       showToast('Failed to load admins.', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => { loadAdmins(); }, [loadAdmins]);
 
   const handleToggle = async (id) => {
     try {

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { useToast } from '../../context/ToastContext';
@@ -17,18 +18,18 @@ export const MasterDashboard = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { loadStats(); }, []);
-
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       const data = await api.masterDashboard();
       setStats(data.stats);
-    } catch (err) {
+    } catch {
       showToast('Failed to load dashboard stats.', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => { loadStats(); }, [loadStats]);
 
   const handleMarkOverdue = async () => {
     try {

@@ -111,6 +111,51 @@ export const settingsController = {
     } catch (err) {
       next(err);
     }
+  },
+
+  uploadLogo: async (req, res, next) => {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Logo image file is required.' });
+    }
+
+    const logoUrl = `${req.protocol}://${req.get('host')}/uploads/logos/${req.file.filename}`;
+
+    try {
+      const updatedValue = await runInTransaction(req.tenantId, async (client) => {
+        const settingsRes = await client.query(
+          `SELECT business_info
+           FROM tenant_settings
+           WHERE tenant_id = $1 FOR UPDATE`,
+          [req.tenantId]
+        );
+
+        if (settingsRes.rows.length === 0) {
+          throw new Error('Settings not initialized.');
+        }
+
+        const targetValue = {
+          ...settingsRes.rows[0].business_info,
+          logoUrl
+        };
+
+        await client.query(
+          `UPDATE tenant_settings
+           SET business_info = $1
+           WHERE tenant_id = $2`,
+          [targetValue, req.tenantId]
+        );
+
+        return targetValue;
+      });
+
+      return res.status(201).json({
+        message: 'Business logo uploaded successfully.',
+        logoUrl,
+        data: updatedValue
+      });
+    } catch (err) {
+      next(err);
+    }
   }
 };
 

@@ -15,6 +15,9 @@ export const DEFAULT_ACCOUNTS = [
   { name: 'Tax Liability',        type: 'liability', code: 'TAX_DEFAULT' },
   { name: 'Platform Fee Expense', type: 'expense',   code: 'FEE_DEFAULT' },
   { name: 'Vendor Payable',       type: 'liability', code: 'VENDOR_PAYABLE_DEFAULT' },
+  { name: 'Gateway Clearing Account', type: 'asset', code: 'GATEWAY_CLEARING' },
+  { name: 'Convenience Fee Revenue', type: 'revenue', code: 'CONVENIENCE_FEE_REVENUE' },
+  { name: 'TDS Payable - Sec 194O', type: 'liability', code: 'TDS_PAYABLE_194O' },
 ];
 
 /**
@@ -121,20 +124,65 @@ export const postLedgerTransaction = async (client, tenantId, description, trans
 
 /**
  * Posts journal entries when an invoice is finalized (status → published/sent).
- * Journal:
+ * Journal (Standard):
  *   DEBIT  AR_DEFAULT    totalDue   (asset increases — money owed to us)
  *   CREDIT REV_DEFAULT   subTotal   (revenue recognized)
  *   CREDIT TAX_DEFAULT   taxAmount  (tax liability owed to government)
+ *
+ * Journal (With Marketplace Vendors):
+ *   DEBIT  AR_DEFAULT             totalDue
+ *   CREDIT REV_DEFAULT            platformRevenue (platform commission + internal services)
+ *   CREDIT VENDOR_PAYABLE_DEFAULT totalVendorShare (liability owed to vendor)
+ *   CREDIT TAX_DEFAULT            taxAmount
  */
 export const postInvoiceLedger = async (client, tenantId, documentNumber, subTotal, taxAmount, totalDue, documentId = null) => {
   const description = `Invoice Generation: ${documentNumber}`;
+  
+  let totalVendorShare = 0;
+
+  if (documentId) {
+    // Fetch line items and vendor details to determine vendor share
+    const linesRes = await client.query(
+      `SELECT dl.amount, dl.vendor_id, dl.vendor_cost, dl.quantity, v.platform_fee_percentage
+       FROM document_lines dl
+       LEFT JOIN vendors v ON dl.vendor_id = v.id
+       WHERE dl.document_id = $1`,
+      [documentId]
+    );
+
+    for (const line of linesRes.rows) {
+      if (line.vendor_id) {
+        if (line.vendor_cost !== null && line.vendor_cost !== undefined) {
+          const vendorShare = parseFloat(line.vendor_cost) * parseFloat(line.quantity || 1);
+          totalVendorShare += vendorShare;
+        } else {
+          const lineAmount = parseFloat(line.amount);
+          const feePercent = parseFloat(line.platform_fee_percentage !== null && line.platform_fee_percentage !== undefined ? line.platform_fee_percentage : 5.00);
+          const platformFee = lineAmount * (feePercent / 100);
+          const vendorShare = lineAmount - platformFee;
+          totalVendorShare += vendorShare;
+        }
+      }
+    }
+  }
+
+  const totalVendorShareVal = parseFloat(totalVendorShare.toFixed(4));
   const entries = [
-    { code: 'AR_DEFAULT',  debit: totalDue },
-    { code: 'REV_DEFAULT', credit: subTotal },
+    { code: 'AR_DEFAULT', debit: parseFloat(totalDue) }
   ];
 
+  if (totalVendorShareVal > 0) {
+    const platformRevenue = parseFloat((parseFloat(subTotal) - totalVendorShareVal).toFixed(4));
+    if (platformRevenue > 0) {
+      entries.push({ code: 'REV_DEFAULT', credit: platformRevenue });
+    }
+    entries.push({ code: 'VENDOR_PAYABLE_DEFAULT', credit: totalVendorShareVal });
+  } else {
+    entries.push({ code: 'REV_DEFAULT', credit: parseFloat(subTotal) });
+  }
+
   if (parseFloat(taxAmount) > 0) {
-    entries.push({ code: 'TAX_DEFAULT', credit: taxAmount });
+    entries.push({ code: 'TAX_DEFAULT', credit: parseFloat(taxAmount) });
   }
 
   return postLedgerTransaction(client, tenantId, description, 'invoice_generation', documentId, entries);
@@ -147,19 +195,43 @@ export const postInvoiceLedger = async (client, tenantId, documentNumber, subTot
  *   DEBIT  FEE_DEFAULT    gatewayFee   (gateway fee recognized as expense)
  *   CREDIT AR_DEFAULT     totalPaid    (clears accounts receivable)
  */
-export const postPaymentLedger = async (client, tenantId, documentNumber, paidAmount, gatewayFee, documentId = null) => {
+export const postPaymentLedger = async (client, tenantId, documentNumber, paidAmount, gatewayFee, documentId = null, convenienceFeeAmount = 0, convenienceFeeTax = 0, baseInvoiceTotal = 0, isOffline = false) => {
   const description = `Invoice Payment Received: ${documentNumber}`;
   const feeAmount = parseFloat(gatewayFee || 0);
-  const cashAmount = parseFloat(paidAmount) - feeAmount;
+  const debitAccount = isOffline ? 'CASH_DEFAULT' : 'GATEWAY_CLEARING';
+  
+  let entries = [];
 
-  const entries = [
-    { code: 'AR_DEFAULT',   credit: paidAmount },
-    { code: 'CASH_DEFAULT', debit: cashAmount },
-  ];
+  if (convenienceFeeAmount > 0) {
+    // Strategy B: Passing the Fee to the Client
+    const clearingNet = paidAmount - feeAmount;
+    const gstOnFee = feeAmount * 0.18; // GST levied on the Razorpay Fee
+    const platformFeeBase = feeAmount - gstOnFee;
 
-  if (feeAmount > 0) {
-    entries.push({ code: 'FEE_DEFAULT', debit: feeAmount });
+    entries = [
+      { code: debitAccount, debit: clearingNet },
+      { code: 'FEE_DEFAULT', debit: platformFeeBase },
+      { code: 'TAX_DEFAULT', debit: gstOnFee }, // GST Input Tax Credit
+      { code: 'AR_DEFAULT', credit: baseInvoiceTotal },
+      { code: 'CONVENIENCE_FEE_REVENUE', credit: parseFloat(convenienceFeeAmount) },
+      { code: 'TAX_DEFAULT', credit: parseFloat(convenienceFeeTax) } // Output CGST/SGST on Convenience Fee
+    ];
+  } else {
+    // Strategy A: Absorbing the Fee
+    const cashAmount = parseFloat(paidAmount) - feeAmount;
+    const gstOnFee = feeAmount * 0.18;
+    const platformFeeBase = feeAmount - gstOnFee;
+
+    entries = [
+      { code: 'AR_DEFAULT', credit: paidAmount },
+      { code: debitAccount, debit: cashAmount },
+      { code: 'FEE_DEFAULT', debit: platformFeeBase },
+      { code: 'TAX_DEFAULT', debit: gstOnFee } // GST Input Tax Credit
+    ];
   }
+
+  // Filter out any entries with 0 amount to satisfy DB constraints
+  entries = entries.filter(e => e.debit > 0 || e.credit > 0);
 
   return postLedgerTransaction(client, tenantId, description, 'invoice_payment', documentId, entries);
 };

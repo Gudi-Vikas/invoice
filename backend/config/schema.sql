@@ -174,6 +174,10 @@
         razorpay_order_id VARCHAR(255),
         razorpay_payment_id VARCHAR(255),
         notes TEXT,
+        convenience_fee_enabled BOOLEAN NOT NULL DEFAULT false,
+        convenience_fee_amount NUMERIC(15, 4) NOT NULL DEFAULT 0.0000,
+        convenience_fee_tax_amount NUMERIC(15, 4) NOT NULL DEFAULT 0.0000,
+        offline_payment_info JSONB,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT unique_tenant_document_number UNIQUE (tenant_id, document_number)
     );
@@ -189,6 +193,7 @@
         adjust NUMERIC(15, 4) NOT NULL DEFAULT 0.0000, -- per-line discount (+) or markup (-)
         amount NUMERIC(15, 4) NOT NULL,               -- (quantity * unit_price) + adjust
         vendor_id UUID, -- If associated with a marketplace vendor
+        vendor_cost NUMERIC(15, 4), -- Dedicated cost/payout for this line item (optional)
         sort_order INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -203,6 +208,9 @@
         email VARCHAR(255) NOT NULL,
         phone VARCHAR(20),
         address JSONB DEFAULT '{}'::jsonb,
+        razorpay_account_id VARCHAR(255) UNIQUE,
+        pan_number VARCHAR(255),
+        pan_verified BOOLEAN NOT NULL DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -374,19 +382,11 @@
     -- SEED DATA (SaaS Plans and Plan Features)
     -- =========================================================================
     INSERT INTO plans (id, name, price_monthly, external_product_id) VALUES
-    ('b3310000-0000-0000-0000-000000000001', 'Starter Plan',    999.00, 'plan_starter_ext'),
-    ('b3310000-0000-0000-0000-000000000002', 'Growth Plan',    2499.00, 'plan_growth_ext'),
-    ('b3310000-0000-0000-0000-000000000003', 'Enterprise Plan', 4999.00, 'plan_enterprise_ext')
+    ('b3310000-0000-0000-0000-000000000001', 'Starter Plan', 999.00, 'plan_T386GQb9xDOYte')
     ON CONFLICT DO NOTHING;
 
     INSERT INTO plan_features (plan_id, feature_key, usage_limit) VALUES
     ('b3310000-0000-0000-0000-000000000001', 'max_invoices_per_month', 50),
     ('b3310000-0000-0000-0000-000000000001', 'max_vendors',             2),
-    ('b3310000-0000-0000-0000-000000000001', 'custom_branding',         0),
-    ('b3310000-0000-0000-0000-000000000002', 'max_invoices_per_month', 500),
-    ('b3310000-0000-0000-0000-000000000002', 'max_vendors',            10),
-    ('b3310000-0000-0000-0000-000000000002', 'custom_branding',         1),
-    ('b3310000-0000-0000-0000-000000000003', 'max_invoices_per_month', -1),
-    ('b3310000-0000-0000-0000-000000000003', 'max_vendors',            -1),
-    ('b3310000-0000-0000-0000-000000000003', 'custom_branding',         1)
+    ('b3310000-0000-0000-0000-000000000001', 'custom_branding',         1)
     ON CONFLICT DO NOTHING;

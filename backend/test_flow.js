@@ -48,7 +48,7 @@ const testRazorpaySplits = async () => {
   console.log(`-> Vendor payout share: ${vendorShare} INR`);
   
   const orderRes = await razorpayService.createOrderWithSplits(totalAmount, [
-    { razorpayAccountId: 'acc_linked_test', amount: vendorShare, vendorId: 'vendor_uuid_123', description: 'Web Dev Service' }
+    { razorpayAccountId: 'acc_linked_test123', amount: vendorShare, vendorId: 'vendor_uuid_123', description: 'Web Dev Service' }
   ]);
   
   console.log('-> Razorpay Order Result:', orderRes);

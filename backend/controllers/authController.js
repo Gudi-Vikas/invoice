@@ -3,10 +3,10 @@ import jwt from 'jsonwebtoken';
 import { runInTransaction, runWithoutRLS } from '../config/db.js';
 import { initializeLedgerAccounts } from '../services/ledgerService.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkey123!';
+const JWT_SECRET = process.env.JWT_SECRET;
 const INVITE_TTL_HOURS = 72;
 const STARTER_PLAN_ID = 'b3310000-0000-0000-0000-000000000001';
-const TRIAL_DAYS = 30;
+const STARTER_LOCK_DAYS = 7;
 
 /**
  * Issues a signed JWT for the given user + tenant combination.
@@ -68,6 +68,19 @@ const buildDefaultSettings = (name, email) => ({
     defaultTaxPercentage: 18.00,
     defaultTaxName: 'GST'
   },
+  payments_config: {
+    passGatewayFees: false,
+    bankDetails: '',
+    razorpayKeyId: '',
+    currencyPosition: 'left',
+    gpayNumber: '6300440316',
+    bankName: 'HDFC Bank',
+    bankAccountNumber: '50200092611852',
+    bankAccountName: 'Ultrakey IT Solutions Pvt. Ltd.',
+    bankIfsc: 'HDFC0000968',
+    bankBranch: 'GACHIBOWLI',
+    upiId: '6300440316@ybl'
+  },
   email_templates: {
     quote_availability: {
       subject: 'Quotation {{document_number}} is ready',
@@ -101,7 +114,7 @@ const buildDefaultSettings = (name, email) => ({
  * Seeds all standard resources for a brand-new tenant workspace:
  *   1. Default tenant_settings row
  *   2. Double-entry chart of accounts (ledger)
- *   3. Starter plan subscription (30-day trial)
+ *   3. Starter plan subscription in past_due state until payment completes
  *
  * Must be called inside an open transaction client that already has
  * `app.current_tenant_id` set via set_config.
@@ -117,14 +130,15 @@ const seedNewTenant = async (client, tenantId, tenantName, adminEmail) => {
   await client.query(
     `INSERT INTO tenant_settings
        (tenant_id, general_config, business_info, invoice_config,
-        tax_config, email_templates, translations)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        tax_config, payments_config, email_templates, translations)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [
       tenantId,
       defaults.general_config,
       defaults.business_info,
       defaults.invoice_config,
       defaults.tax_config,
+      defaults.payments_config,
       defaults.email_templates,
       defaults.translations
     ]
@@ -132,13 +146,13 @@ const seedNewTenant = async (client, tenantId, tenantName, adminEmail) => {
 
   await initializeLedgerAccounts(client, tenantId);
 
-  const trialEnd = new Date();
-  trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
+  const lockedUntil = new Date();
+  lockedUntil.setDate(lockedUntil.getDate() + STARTER_LOCK_DAYS);
 
   await client.query(
     `INSERT INTO subscriptions (tenant_id, plan_id, status, current_period_end)
-     VALUES ($1, $2, 'active', $3)`,
-    [tenantId, STARTER_PLAN_ID, trialEnd]
+     VALUES ($1, $2, 'past_due', $3)`,
+    [tenantId, STARTER_PLAN_ID, lockedUntil]
   );
 };
 
@@ -190,33 +204,55 @@ export const authController = {
 
         // B. Insert or retrieve global user
         let user;
-        try {
-          const userResult = await client.query(
-            `INSERT INTO users (email, password_hash)
-             VALUES ($1, $2)
-             RETURNING id, email`,
-            [email, await bcrypt.hash(password, 10)]
-          );
+
+        // Try creating a new user.
+        // If email already exists, do nothing instead of throwing an error.
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const userResult = await client.query(
+          `
+  INSERT INTO users (email, password_hash)
+  VALUES ($1, $2)
+  ON CONFLICT (email) DO NOTHING
+  RETURNING id, email
+  `,
+          [email, hashedPassword]
+        );
+
+        if (userResult.rows.length > 0) {
+          // New user created
           user = userResult.rows[0];
-        } catch (pgErr) {
-          if (pgErr.code === '23505') {
-            // Email already registered — verify password before linking to new tenant
-            const existingRes = await client.query(
-              'SELECT id, email, password_hash FROM users WHERE email = $1',
-              [email]
+        } else {
+          // User already exists
+          const existingRes = await client.query(
+            `
+    SELECT id, email, password_hash
+    FROM users
+    WHERE email = $1
+    `,
+            [email]
+          );
+
+          const existing = existingRes.rows[0];
+
+          const valid = await bcrypt.compare(
+            password,
+            existing.password_hash
+          );
+
+          if (!valid) {
+            throw Object.assign(
+              new Error(
+                'Incorrect password for the existing account associated with this email.'
+              ),
+              { statusCode: 400 }
             );
-            const existing = existingRes.rows[0];
-            const valid = await bcrypt.compare(password, existing.password_hash);
-            if (!valid) {
-              throw Object.assign(
-                new Error('Incorrect password for the existing account associated with this email.'),
-                { statusCode: 400 }
-              );
-            }
-            user = { id: existing.id, email: existing.email };
-          } else {
-            throw pgErr;
           }
+
+          user = {
+            id: existing.id,
+            email: existing.email
+          };
         }
 
         // C. Associate user with tenant as 'admin'
@@ -304,7 +340,7 @@ export const authController = {
       }
 
       // Check if all tenants are suspended — give the user a clear message.
-      const activeTenants   = tenants.filter((t) => t.status === 'active');
+      const activeTenants = tenants.filter((t) => t.status === 'active');
       const suspendedTenants = tenants.filter((t) => t.status === 'suspended');
 
       if (activeTenants.length === 0 && suspendedTenants.length > 0) {
@@ -675,6 +711,26 @@ export const authController = {
       if (err.statusCode) {
         return res.status(err.statusCode).json({ error: err.message });
       }
+      next(err);
+    }
+  },
+
+  listUsers: async (req, res, next) => {
+    try {
+      const usersList = await runInTransaction(req.tenantId, async (client) => {
+        const result = await client.query(
+          `SELECT u.id, u.email, tu.role, u.created_at
+           FROM tenant_users tu
+           JOIN users u ON u.id = tu.user_id
+           WHERE tu.tenant_id = $1
+           ORDER BY tu.role DESC, u.created_at ASC`,
+          [req.tenantId]
+        );
+        return result.rows;
+      });
+
+      return res.json(usersList);
+    } catch (err) {
       next(err);
     }
   }
