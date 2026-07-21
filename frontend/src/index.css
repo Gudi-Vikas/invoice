@@ -321,7 +321,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Glassmorphism Card Panels */
 .glass-card, .admin-card, .plan-card, .billing-card {
-  background: var(--bg-card);
+  background: rgb(22 25 37);
   backdrop-filter: blur(var(--card-blur));
   -webkit-backdrop-filter: blur(var(--card-blur));
   border: 1px solid var(--border-color);
