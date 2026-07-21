@@ -283,14 +283,6 @@ export const subscriptionController = {
           throw Object.assign(new Error('Invoice has already been settled.'), { statusCode: 400 });
         }
 
-        // Check if there is already an active subscription
-        const activeSubCheck = await client.query(
-          "SELECT id FROM subscriptions WHERE tenant_id = $1 AND status = 'active'",
-          [req.tenantId]
-        );
-        if (activeSubCheck.rows.length > 0) {
-          throw Object.assign(new Error('This workspace already has an active subscription.'), { statusCode: 400 });
-        }
 
         const rzpOrder = await razorpayService.createOrder({
           amountInRupees: parseFloat(invoice.total_amount),

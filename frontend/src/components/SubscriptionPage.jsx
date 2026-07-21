@@ -4,9 +4,10 @@ import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
-  CreditCard, Check, X, Zap, ArrowRight, Infinity,
-  Users, FileText, Crown, Clock, TrendingUp
+  CreditCard, Check, X, Zap, ArrowRight,
+  Users, FileText, Crown, Clock, TrendingUp, Eye
 } from 'lucide-react';
+import PlatformInvoiceVisualizer from './shared/PlatformInvoiceVisualizer';
 
 const loadRazorpayScript = () => new Promise((resolve) => {
   if (window.Razorpay) {
@@ -42,6 +43,7 @@ export const SubscriptionPage = () => {
   const [invoices, setInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [payingInvoice, setPayingInvoice] = useState(null);
+  const [viewingInvoice, setViewingInvoice] = useState(null);
 
   const [subscription, setSubscription] = useState(null);
   const [loadingSubscription, setLoadingSubscription] = useState(true);
@@ -207,6 +209,21 @@ export const SubscriptionPage = () => {
       <div className="fade-in">
         <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '1rem' }}>Subscription</h1>
         <p style={{ color: 'var(--text-secondary)' }}>Loading subscription details...</p>
+      </div>
+    );
+  }
+
+  if (viewingInvoice) {
+    return (
+      <div className="fade-in">
+        <PlatformInvoiceVisualizer
+          invoice={viewingInvoice}
+          tenantName={activeTenant?.name || activeTenant?.domain || 'Tenant'}
+          onClose={() => setViewingInvoice(null)}
+          onPay={() => handlePayInvoice(viewingInvoice)}
+          isPaying={payingInvoice === viewingInvoice.id}
+          showPayButton={true}
+        />
       </div>
     );
   }
@@ -488,13 +505,20 @@ export const SubscriptionPage = () => {
                           </span>
                         </td>
                         <td style={{ textAlign: 'right' }}>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '0.35rem 0.5rem', fontSize: '0.8rem', marginRight: '0.3rem', color: 'var(--accent-primary)' }}
+                            onClick={() => setViewingInvoice(inv)}
+                            title="View Bill"
+                          >
+                            <Eye size={15} />
+                          </button>
                           {(inv.status === 'pending' || inv.status === 'overdue') && (
                             <button
                               className="btn btn-primary"
                               style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
                               onClick={() => handlePayInvoice(inv)}
-                              disabled={payingInvoice === inv.id || isActive}
-                              title={isActive ? 'Workspace already has an active subscription' : undefined}
+                              disabled={payingInvoice === inv.id}
                             >
                               {payingInvoice === inv.id ? 'Paying...' : 'Pay Online'}
                             </button>

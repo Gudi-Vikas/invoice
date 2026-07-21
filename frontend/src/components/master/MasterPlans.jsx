@@ -40,6 +40,7 @@ export const MasterPlans = () => {
   const [editing, setEditing] = useState(null); // null = create, object = edit
   const [form, setForm] = useState({ ...emptyPlan });
   const [saving, setSaving] = useState(false);
+  const [archivingId, setArchivingId] = useState(null);
 
   const loadPlans = useCallback(async () => {
     try {
@@ -128,22 +129,30 @@ export const MasterPlans = () => {
 
   const handleArchive = async (plan) => {
     if (!confirm(`Archive "${plan.name}"? It will be hidden from tenants but existing subscribers will keep their plan.`)) return;
+    if (archivingId) return;
+    setArchivingId(plan.id);
     try {
       const result = await api.masterArchivePlan(plan.id);
       showToast(result.message, 'success');
       loadPlans();
     } catch (err) {
       showToast(err.message, 'error');
+    } finally {
+      setArchivingId(null);
     }
   };
 
   const handleRestore = async (plan) => {
+    if (archivingId) return;
+    setArchivingId(plan.id);
     try {
       const result = await api.masterRestorePlan(plan.id);
       showToast(result.message, 'success');
       loadPlans();
     } catch (err) {
       showToast(err.message, 'error');
+    } finally {
+      setArchivingId(null);
     }
   };
 
@@ -313,16 +322,18 @@ export const MasterPlans = () => {
                       className="btn btn-primary"
                       style={{ flex: 1, fontSize: '0.82rem', padding: '0.5rem' }}
                       onClick={() => handleRestore(plan)}
+                      disabled={archivingId === plan.id}
                     >
-                      <RotateCcw size={13} /> Restore
+                      <RotateCcw size={13} /> {archivingId === plan.id ? 'Restoring...' : 'Restore'}
                     </button>
                   ) : (
                     <button
                       className="btn btn-danger"
                       style={{ flex: 1, fontSize: '0.82rem', padding: '0.5rem' }}
                       onClick={() => handleArchive(plan)}
+                      disabled={archivingId === plan.id}
                     >
-                      <Archive size={13} /> Archive
+                      <Archive size={13} /> {archivingId === plan.id ? 'Archiving...' : 'Archive'}
                     </button>
                   )}
                 </div>

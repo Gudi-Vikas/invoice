@@ -38,6 +38,12 @@ export const MasterTenantDetail = () => {
   const [inviteRole, setInviteRole] = useState('member');
   const [inviteLink, setInviteLink] = useState('');
 
+  // Double-click prevention states
+  const [actionInProgress, setActionInProgress] = useState(false);
+  const [overriding, setOverriding] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [inviting, setInviting] = useState(false);
+
   const loadPlans = useCallback(async () => {
     try {
       const planData = await api.getPlans();
@@ -61,31 +67,42 @@ export const MasterTenantDetail = () => {
   useEffect(() => { loadTenant(); loadPlans(); }, [loadTenant, loadPlans]);
 
   const handleSuspend = async () => {
+    if (actionInProgress) return;
+    setActionInProgress(true);
     try {
       await api.masterDisableTenant(id, 'Suspended by platform admin');
       showToast('Tenant suspended.', 'success');
       loadTenant();
     } catch (err) { showToast(err.message, 'error'); }
+    finally { setActionInProgress(false); }
   };
 
   const handleEnable = async () => {
+    if (actionInProgress) return;
+    setActionInProgress(true);
     try {
       await api.masterEnableTenant(id);
       showToast('Tenant re-activated.', 'success');
       loadTenant();
     } catch (err) { showToast(err.message, 'error'); }
+    finally { setActionInProgress(false); }
   };
 
   const handleDelete = async () => {
+    if (actionInProgress) return;
+    setActionInProgress(true);
     try {
       await api.masterDeleteTenant(id);
       showToast('Tenant permanently deleted.', 'success');
       navigate('/master/tenants');
     } catch (err) { showToast(err.message, 'error'); }
+    finally { setActionInProgress(false); }
   };
 
   const handleSubOverride = async (e) => {
     e.preventDefault();
+    if (overriding) return;
+    setOverriding(true);
     const payload = {};
     if (subOverride.planId) payload.planId = subOverride.planId;
     if (subOverride.status) payload.status = subOverride.status;
@@ -96,10 +113,13 @@ export const MasterTenantDetail = () => {
       showToast('Subscription overridden.', 'success');
       loadTenant();
     } catch (err) { showToast(err.message, 'error'); }
+    finally { setOverriding(false); }
   };
 
   const handleGenerateInvoice = async (e) => {
     e.preventDefault();
+    if (generating) return;
+    setGenerating(true);
     try {
       const payload = {
         tenantId: id,
@@ -125,11 +145,15 @@ export const MasterTenantDetail = () => {
       loadTenant();
     } catch (err) {
       showToast(err.message, 'error');
+    } finally {
+      setGenerating(false);
     }
   };
 
   const handleInviteUser = async (e) => {
     e.preventDefault();
+    if (inviting) return;
+    setInviting(true);
     try {
       const result = await api.invite({ email: inviteEmail, role: inviteRole }, id);
       setInviteLink(result.joinUrl);
@@ -137,6 +161,8 @@ export const MasterTenantDetail = () => {
       loadTenant();
     } catch (err) {
       showToast(err.message, 'error');
+    } finally {
+      setInviting(false);
     }
   };
 
@@ -176,15 +202,15 @@ export const MasterTenantDetail = () => {
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           {tenant.status === 'active' ? (
-            <button className="btn btn-secondary" onClick={handleSuspend} style={{ fontSize: '0.82rem', color: 'var(--accent-warning)' }}>
-              <PowerOff size={14} /> Suspend
+            <button className="btn btn-secondary" onClick={handleSuspend} disabled={actionInProgress} style={{ fontSize: '0.82rem', color: 'var(--accent-warning)', opacity: actionInProgress ? 0.7 : 1 }}>
+              <PowerOff size={14} /> {actionInProgress ? 'Suspending...' : 'Suspend'}
             </button>
           ) : (
-            <button className="btn btn-primary" onClick={handleEnable} style={{ fontSize: '0.82rem' }}>
-              <Power size={14} /> Enable
+            <button className="btn btn-primary" onClick={handleEnable} disabled={actionInProgress} style={{ fontSize: '0.82rem', opacity: actionInProgress ? 0.7 : 1 }}>
+              <Power size={14} /> {actionInProgress ? 'Enabling...' : 'Enable'}
             </button>
           )}
-          <button className="btn btn-danger" onClick={() => setShowDeleteModal(true)} style={{ fontSize: '0.82rem' }}>
+          <button className="btn btn-danger" onClick={() => setShowDeleteModal(true)} disabled={actionInProgress} style={{ fontSize: '0.82rem' }}>
             <Trash2 size={14} /> Delete
           </button>
         </div>
@@ -302,8 +328,8 @@ export const MasterTenantDetail = () => {
                     value={subOverride.currentPeriodEnd} onChange={e => setSubOverride(p => ({ ...p, currentPeriodEnd: e.target.value }))} />
                 </div>
               </div>
-              <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem' }}>
-                <Save size={14} /> Apply Override
+              <button type="submit" className="btn btn-primary" disabled={overriding} style={{ marginTop: '1rem', opacity: overriding ? 0.7 : 1 }}>
+                <Save size={14} /> {overriding ? 'Applying...' : 'Apply Override'}
               </button>
             </form>
           </div>
@@ -424,7 +450,7 @@ export const MasterTenantDetail = () => {
               </div>
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowGenerateModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Generate</button>
+                <button type="submit" className="btn btn-primary" disabled={generating} style={{ opacity: generating ? 0.7 : 1 }}>{generating ? 'Generating...' : 'Generate'}</button>
               </div>
             </form>
           </div>
@@ -481,7 +507,7 @@ export const MasterTenantDetail = () => {
 
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowInviteModal(false)}>Close</button>
-                <button type="submit" className="btn btn-primary" disabled={!!inviteLink}>Invite</button>
+                <button type="submit" className="btn btn-primary" disabled={!!inviteLink || inviting} style={{ opacity: inviting ? 0.7 : 1 }}>{inviting ? 'Inviting...' : 'Invite'}</button>
               </div>
             </form>
           </div>
@@ -500,8 +526,8 @@ export const MasterTenantDetail = () => {
             </p>
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-              <button className="btn btn-danger" onClick={handleDelete}>
-                <Trash2 size={14} /> Delete Forever
+              <button className="btn btn-danger" onClick={handleDelete} disabled={actionInProgress} style={{ opacity: actionInProgress ? 0.7 : 1 }}>
+                <Trash2 size={14} /> {actionInProgress ? 'Deleting...' : 'Delete Forever'}
               </button>
             </div>
           </div>

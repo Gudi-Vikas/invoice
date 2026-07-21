@@ -35,6 +35,7 @@ export const Clients = () => {
 
   // Feedback
   const [feedback, setFeedback] = useState({ type: '', message: '' });
+  const [saving, setSaving] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -72,8 +73,9 @@ export const Clients = () => {
   // ─── ADD CLIENT ──────────────────────────────────────────────────────────────
   const handleAddSubmit = async (e) => {
     e.preventDefault();
-    if (!addForm.name || !addForm.email) return;
+    if (!addForm.name || !addForm.email || saving) return;
 
+    setSaving(true);
     try {
       await api.createClient({
         name: addForm.name,
@@ -87,6 +89,8 @@ export const Clients = () => {
       loadClients();
     } catch (err) {
       showFeedback('error', 'Failed to register client: ' + err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -107,8 +111,9 @@ export const Clients = () => {
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    if (!editingClient) return;
+    if (!editingClient || saving) return;
 
+    setSaving(true);
     try {
       await api.updateClient(editingClient.id, {
         name: editForm.name,
@@ -121,6 +126,8 @@ export const Clients = () => {
       loadClients();
     } catch (err) {
       showFeedback('error', 'Failed to update client: ' + err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -375,8 +382,8 @@ export const Clients = () => {
 
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">
-                  <UserPlus size={16} /> Create Client
+                <button type="submit" className="btn btn-primary" disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>
+                  <UserPlus size={16} /> {saving ? 'Creating...' : 'Create Client'}
                 </button>
               </div>
             </form>
@@ -449,8 +456,8 @@ export const Clients = () => {
 
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setEditingClient(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">
-                  <Check size={16} /> Save Changes
+                <button type="submit" className="btn btn-primary" disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>
+                  <Check size={16} /> {saving ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>

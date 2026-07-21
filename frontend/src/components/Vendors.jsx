@@ -17,6 +17,7 @@ export const Vendors = () => {
   const [bizName, setBizName] = useState('');
   const [email, setEmail] = useState('');
   const [feePercent, setFeePercent] = useState(5.00);
+  const [creatingVendor, setCreatingVendor] = useState(false);
 
   // KYC Form modal inline
   const [kycVendorId, setKycVendorId] = useState(null);
@@ -25,6 +26,7 @@ export const Vendors = () => {
   const [holderAddress, setHolderAddress] = useState('');
   const [bankIfsc, setBankIfsc] = useState('');
   const [bankAccount, setBankAccount] = useState('');
+  const [submittingKyc, setSubmittingKyc] = useState(false);
 
   // Details Modal
   const [selectedVendor, setSelectedVendor] = useState(null);
@@ -66,8 +68,9 @@ export const Vendors = () => {
 
   const handleAddVendor = async (e) => {
     e.preventDefault();
-    if (!bizName || !email) return;
+    if (!bizName || !email || creatingVendor) return;
 
+    setCreatingVendor(true);
     try {
       await api.createVendor({
         businessName: bizName,
@@ -82,13 +85,16 @@ export const Vendors = () => {
       loadVendors();
     } catch (err) {
       showToast('Failed to register vendor: ' + err.message, 'error');
+    } finally {
+      setCreatingVendor(false);
     }
   };
 
   const handleKycSubmit = async (e) => {
     e.preventDefault();
-    if (!kycVendorId || !holderName || !bankAccount) return;
+    if (!kycVendorId || !holderName || !bankAccount || submittingKyc) return;
 
+    setSubmittingKyc(true);
     try {
       await api.submitKyc(kycVendorId, {
         stakeholder: {
@@ -114,6 +120,8 @@ export const Vendors = () => {
       loadVendors();
     } catch (err) {
       showToast('Failed to submit KYC data: ' + err.message, 'error');
+    } finally {
+      setSubmittingKyc(false);
     }
   };
 
@@ -324,7 +332,7 @@ export const Vendors = () => {
 
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddForm(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Create Vendor</button>
+                <button type="submit" className="btn btn-primary" disabled={creatingVendor} style={{ opacity: creatingVendor ? 0.7 : 1 }}>{creatingVendor ? 'Creating...' : 'Create Vendor'}</button>
               </div>
             </form>
           </div>
@@ -409,7 +417,7 @@ export const Vendors = () => {
 
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setKycVendorId(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Submit KYC</button>
+                <button type="submit" className="btn btn-primary" disabled={submittingKyc} style={{ opacity: submittingKyc ? 0.7 : 1 }}>{submittingKyc ? 'Submitting...' : 'Submit KYC'}</button>
               </div>
             </form>
           </div>
