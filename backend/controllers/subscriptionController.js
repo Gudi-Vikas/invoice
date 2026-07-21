@@ -3,10 +3,9 @@ import pool from '../config/db.js';
 import razorpayService from '../services/razorpayService.js';
 import { createPlatformInvoice } from './platformBillingController.js';
 
-const STARTER_PLAN_ID = 'b3310000-0000-0000-0000-000000000001';
-
 /**
  * Controller managing platform subscription plans and subscription order checks.
+ * Supports any active plan — no longer hardcoded to a single Starter plan.
  */
 export const subscriptionController = {
   getStatus: async (req, res, next) => {
@@ -14,7 +13,8 @@ export const subscriptionController = {
       const result = await runInTransaction(req.tenantId, async (client) => {
         const subRes = await client.query(
           `SELECT s.id, s.status, s.current_period_end,
-                  p.id AS plan_id, p.name AS plan_name, p.price_monthly
+                  p.id AS plan_id, p.name AS plan_name, p.price_monthly,
+                  p.description AS plan_description
            FROM subscriptions s
            JOIN plans p ON p.id = s.plan_id
            WHERE s.tenant_id = $1
@@ -23,7 +23,20 @@ export const subscriptionController = {
           [req.tenantId]
         );
 
-        return subRes.rows[0] || null;
+        // Also fetch plan features for the active plan
+        let features = [];
+        if (subRes.rows[0]) {
+          const featRes = await client.query(
+            `SELECT feature_key AS key, usage_limit AS limit
+             FROM plan_features WHERE plan_id = $1`,
+            [subRes.rows[0].plan_id]
+          );
+          features = featRes.rows;
+        }
+
+        return subRes.rows[0]
+          ? { ...subRes.rows[0], features }
+          : null;
       });
 
       return res.json({
@@ -37,19 +50,26 @@ export const subscriptionController = {
 
   /**
    * 1. Lists all available SaaS subscription plans and their feature gates.
+   *    Returns only active plans, ordered by display_order.
    */
   getPlans: async (req, res, next) => {
     try {
-      // Query global plans table (no RLS)
+      // Query global plans table (no RLS needed — plans are global)
       const plansRes = await pool.query(
-        `SELECT p.id, p.name, p.price_monthly, p.external_product_id,
-                JSON_AGG(JSON_BUILD_OBJECT('key', pf.feature_key, 'limit', pf.usage_limit)) as features
+        `SELECT p.id, p.name, p.description, p.price_monthly, p.price_annually,
+                p.external_product_id, p.is_featured, p.display_order, p.badge_text,
+                COALESCE(
+                  JSON_AGG(
+                    JSON_BUILD_OBJECT('key', pf.feature_key, 'limit', pf.usage_limit)
+                  ) FILTER (WHERE pf.feature_key IS NOT NULL),
+                  '[]'::json
+                ) AS features
          FROM plans p
          LEFT JOIN plan_features pf ON p.id = pf.plan_id
-         WHERE p.id = $1
-         GROUP BY p.id, p.name, p.price_monthly, p.external_product_id
-         ORDER BY p.price_monthly ASC`,
-        [STARTER_PLAN_ID]
+         WHERE p.is_active = true
+         GROUP BY p.id, p.name, p.description, p.price_monthly, p.price_annually,
+                  p.external_product_id, p.is_featured, p.display_order, p.badge_text
+         ORDER BY p.display_order ASC, p.price_monthly ASC`
       );
 
       return res.json(plansRes.rows);
@@ -60,24 +80,26 @@ export const subscriptionController = {
 
   /**
    * 2. Spawns a subscription checkout order in Razorpay.
+   *    Accepts any valid, active planId.
    */
   initializeCheckout: async (req, res, next) => {
-    const { planId = STARTER_PLAN_ID } = req.body;
+    const { planId } = req.body;
 
-    if (planId !== STARTER_PLAN_ID) {
-      return res.status(400).json({ error: 'Only the Starter plan is available right now.' });
+    if (!planId) {
+      return res.status(400).json({ error: 'planId is required.' });
     }
 
     try {
       const checkoutDetails = await runInTransaction(req.tenantId, async (client) => {
-        // A. Load plan detail
+        // A. Load plan detail — must be active
         const planRes = await client.query(
-          'SELECT id, external_product_id, name, price_monthly FROM plans WHERE id = $1',
+          `SELECT id, external_product_id, name, price_monthly, description
+           FROM plans WHERE id = $1 AND is_active = true`,
           [planId]
         );
 
         if (planRes.rows.length === 0) {
-          throw new Error('SaaS Subscription Plan not found.');
+          throw Object.assign(new Error('Plan not found or is no longer available.'), { statusCode: 400 });
         }
 
         const plan = planRes.rows[0];
@@ -102,14 +124,14 @@ export const subscriptionController = {
         );
         const email = adminRes.rows[0]?.email || 'billing@tenant.local';
 
-        // C. Create a real Razorpay order; payment verification activates access.
+        // C. Create a Razorpay order for the plan amount
         const rzpOrder = await razorpayService.createOrder({
           amountInRupees: plan.price_monthly,
           receipt: `sub_${req.tenantId.slice(0, 8)}_${Date.now()}`,
           notes: {
             tenant_id: req.tenantId,
             plan_id: plan.id,
-            purpose: 'starter_subscription'
+            purpose: 'subscription_payment'
           }
         });
 
@@ -148,8 +170,8 @@ export const subscriptionController = {
 
       return res.json({
         message: checkoutDetails.mockMode
-          ? 'Mock Starter payment order created.'
-          : 'Starter payment order created.',
+          ? 'Mock payment order created.'
+          : 'Payment order created.',
         data: checkoutDetails
       });
     } catch (err) {
@@ -180,41 +202,44 @@ export const subscriptionController = {
         const periodEnd = new Date();
         periodEnd.setMonth(periodEnd.getMonth() + 1);
 
+        // Find the pending subscription by the order ID (works for any plan)
         const updated = await client.query(
           `UPDATE subscriptions
            SET status = 'active',
                current_period_end = $1,
                external_subscription_id = $2
            WHERE tenant_id = $3
-             AND plan_id = $4
-             AND external_subscription_id = $5
-           RETURNING id, status, current_period_end`,
-          [periodEnd, razorpay_payment_id, req.tenantId, STARTER_PLAN_ID, razorpay_order_id]
+             AND external_subscription_id = $4
+             AND status = 'past_due'
+           RETURNING id, plan_id, status, current_period_end`,
+          [periodEnd, razorpay_payment_id, req.tenantId, razorpay_order_id]
         );
 
         if (updated.rows.length === 0) {
-          throw Object.assign(new Error('No pending Starter payment found for this workspace.'), { statusCode: 404 });
+          throw Object.assign(new Error('No pending payment found for this workspace.'), { statusCode: 404 });
         }
 
-        // Fetch plan details to log matching pricing
-        const planRes = await client.query('SELECT price_monthly FROM plans WHERE id = $1', [STARTER_PLAN_ID]);
-        const planPrice = planRes.rows[0]?.price_monthly || 999.00;
+        const activatedSub = updated.rows[0];
+
+        // Fetch plan details for the billing invoice
+        const planRes = await client.query('SELECT price_monthly FROM plans WHERE id = $1', [activatedSub.plan_id]);
+        const planPrice = planRes.rows[0]?.price_monthly || 0;
 
         // Create paid platform invoice record for master admin visibility
         await createPlatformInvoice(client, {
           tenantId: req.tenantId,
-          planId: STARTER_PLAN_ID,
+          planId: activatedSub.plan_id,
           amount: planPrice,
           razorpayOrderId: razorpay_order_id,
           razorpayPaymentId: razorpay_payment_id,
           status: 'paid'
         });
 
-        return updated.rows[0];
+        return activatedSub;
       });
 
       return res.json({
-        message: 'Starter subscription activated.',
+        message: 'Subscription activated successfully.',
         subscription: result
       });
     } catch (err) {

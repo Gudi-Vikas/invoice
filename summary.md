@@ -11,7 +11,7 @@ Razorpay Route split payments, and PostgreSQL Row-Level Security isolation.
 **Tech Stack**:
 - Frontend: React 18 + Vite + Vanilla CSS (HSL-based design system, glassmorphism)
 - Backend: Node.js + Express (ES Modules) + PostgreSQL (pg pool)
-- Payment: Razorpay Route API (linked accounts, split transfers, webhooks)
+- Payment: Razorpay Route API (linked accounts, split trdansfers, webhooks)
 - Auth: JWT (HS256) with x-tenant-id header
 
 **Key Directories**:

@@ -3,6 +3,7 @@ import pool, { runInTransaction } from '../config/db.js';
 import { getNextDocumentNumber } from '../utils/sequence.js';
 import { postInvoiceLedger, postPaymentLedger } from '../services/ledgerService.js';
 import razorpayService from '../services/razorpayService.js';
+import eventBus from '../services/eventBus.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -189,7 +190,19 @@ export const portalController = {
 
           // G. Automatically trigger double-entry ledger inputs for the new published invoice
           await postInvoiceLedger(client, tenantId, docNumber, quote.sub_total, quote.tax_amount, quote.total_due, newInvoice.id);
+
+          // H. Mark quote as converted
+          await client.query(
+            `UPDATE documents SET is_converted_to_invoice = true WHERE tenant_id = $1 AND id = $2`,
+            [tenantId, id]
+          );
         }
+
+        eventBus.emit('quote.accepted', {
+          tenantId,
+          quoteNumber: quote.document_number,
+          quoteId: quote.id
+        });
 
         return { quote, invoice: newInvoice, status: 'accepted' };
       });
@@ -245,6 +258,12 @@ export const portalController = {
           [tenantId, id]
         );
         quote.status = 'declined';
+
+        eventBus.emit('quote.declined', {
+          tenantId,
+          quoteNumber: quote.document_number,
+          quoteId: quote.id
+        });
 
         return { quote, status: 'declined' };
       });
@@ -649,6 +668,13 @@ export const portalController = {
           parseFloat(invoice.total_due)
         );
 
+        eventBus.emit('invoice.paid', {
+          tenantId,
+          invoiceNumber: invoice.document_number,
+          invoiceId: invoice.id,
+          paymentId: razorpay_payment_id
+        });
+
         return { ...invoice, status: 'paid' };
       });
 
@@ -707,6 +733,13 @@ export const portalController = {
            WHERE id = $2`,
           [offlineInfo, id]
         );
+
+        eventBus.emit('invoice.offline_payment_submitted', {
+          tenantId,
+          invoiceNumber: invoice.document_number,
+          invoiceId: invoice.id,
+          reference: transactionReference
+        });
 
         return { ...invoice, status: 'pending_verification', offline_payment_info: offlineInfo };
       });

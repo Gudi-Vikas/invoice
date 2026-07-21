@@ -109,6 +109,41 @@ Razorpay Route split payments, and PostgreSQL Row-Level Security isolation.
 
 ---
 
+## Master Admin RBAC (Role-Based Access Control)
+
+The platform admin panel supports granular, per-section permission control for master admin accounts.
+
+**Permission Keys** (correspond to sidebar sections):
+- `dashboard` — Platform health stats, MRR, recent signups
+- `plans` — SaaS plan CRUD (create, update, archive, restore)
+- `tenants` — Tenant management (list, detail, suspend, delete, override subscription)
+- `billing` — Platform billing invoices (generate, mark paid, void, overdue sweep)
+- `admins` — Co-admin management (create, toggle, edit permissions)
+
+**Access Rules**:
+- `permissions = NULL` → Full (unrestricted) access to all sections. This is the default for seed/legacy admins.
+- `permissions = ["dashboard", "tenants"]` → Restricted to only Dashboard and Tenants sections.
+- Only admins with the `admins` permission (or full access) can create, toggle, or edit other admins.
+- Self-modification is blocked: an admin cannot change their own permissions or toggle their own active status.
+
+**Backend Middleware Pattern**:
+```js
+// In routes/master.js — per-section guard chained after auth + requireMasterAdmin
+import { requireMasterPermission } from '../middleware/auth.js';
+router.get('/dashboard', ...guard, requireMasterPermission('dashboard'), handler);
+```
+
+**DB Schema** (`master_admins` table):
+- `permissions JSONB DEFAULT NULL` — JSON array of allowed section keys, or NULL for full access.
+- `created_by UUID REFERENCES master_admins(id)` — Audit trail for who created this admin.
+
+**Frontend Behavior**:
+- `masterPermissions` is stored in AuthContext and persisted to localStorage on login.
+- `MasterLayout` filters sidebar items based on `masterPermissions`.
+- `MasterAdmins.jsx` provides UI for creating admins with permission checkboxes and editing permissions.
+
+---
+
 ## Global Constraints (All Personas)
 
 1. **RLS is sacred** — Every tenant-scoped table has `ENABLE ROW LEVEL SECURITY` and an isolation policy. Never bypass.
@@ -117,3 +152,4 @@ Razorpay Route split payments, and PostgreSQL Row-Level Security isolation.
 4. **Money precision** — All financial calculations use `NUMERIC(15, 4)` in DB and `toFixed(4)` in JS before rounding for display.
 5. **XSS prevention** — All HTML content (extraInfo, termsAndConditions, footerNotes) MUST pass through `sanitizeHtmlContent()`.
 6. **Skills on-demand** — Load `.skills/*.md` only when the relevant domain task begins. Do not pre-load all skills.
+7. **Master Admin RBAC** — All master admin routes are guarded by `requireMasterPermission(section)`. NULL permissions = full access. See the RBAC section above for details.

@@ -59,6 +59,11 @@
         email VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         is_active BOOLEAN NOT NULL DEFAULT true,
+        -- RBAC: JSON array of allowed section keys.
+        -- NULL = full (unrestricted) access. Example: '["dashboard","tenants"]'
+        -- Allowed keys: dashboard, plans, tenants, billing, admins
+        permissions JSONB DEFAULT NULL,
+        created_by UUID REFERENCES master_admins(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_login_at TIMESTAMP
     );
@@ -154,7 +159,8 @@
         email VARCHAR(255) NOT NULL,
         billing_address JSONB NOT NULL DEFAULT '{}'::jsonb,
         extra_info TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT unique_tenant_client_email UNIQUE (tenant_id, email)
     );
 
     -- 10. Documents (Quotes and Invoices)
@@ -178,7 +184,9 @@
         convenience_fee_amount NUMERIC(15, 4) NOT NULL DEFAULT 0.0000,
         convenience_fee_tax_amount NUMERIC(15, 4) NOT NULL DEFAULT 0.0000,
         offline_payment_info JSONB,
+        is_converted_to_invoice BOOLEAN NOT NULL DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT unique_tenant_document_number UNIQUE (tenant_id, document_number)
     );
 
@@ -211,7 +219,8 @@
         razorpay_account_id VARCHAR(255) UNIQUE,
         pan_number VARCHAR(255),
         pan_verified BOOLEAN NOT NULL DEFAULT false,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT unique_tenant_vendor_email UNIQUE (tenant_id, email)
     );
 
     -- 13. Linked Accounts (Razorpay Route account details mapped to vendors)
@@ -282,6 +291,27 @@
         )
     );
 
+    -- 18. Persistent Notifications (Point-in-Time Events)
+    CREATE TABLE IF NOT EXISTS notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE, -- NULL for master admins
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,     -- NULL for tenant-wide broadcasts
+        type VARCHAR(50) NOT NULL,                               -- 'invoice_paid', 'quote_accepted'
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        action_url VARCHAR(255),
+        is_read BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 19. User Notification Preferences
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+        preferences JSONB NOT NULL DEFAULT '{"email": true, "in_app": true}'::jsonb,
+        PRIMARY KEY (user_id, tenant_id)
+    );
+
 
     -- =========================================================================
     -- INDEX STRUCTURE (tenant_id as the leading column on all tenant-scoped tables)
@@ -309,6 +339,8 @@
     CREATE INDEX IF NOT EXISTS idx_platform_billing_tenant  ON platform_billing_invoices(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_platform_billing_status  ON platform_billing_invoices(status);
     CREATE INDEX IF NOT EXISTS idx_platform_billing_created ON platform_billing_invoices(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_notifications_tenant ON notifications(tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read);
 
 
     -- =========================================================================
@@ -326,6 +358,8 @@
     ALTER TABLE ledger_accounts    ENABLE ROW LEVEL SECURITY;
     ALTER TABLE ledger_transactions ENABLE ROW LEVEL SECURITY;
     ALTER TABLE ledger_entries     ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE notifications      ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
 
     -- Dynamic tenant authorization: SET LOCAL 'app.current_tenant_id' within each transaction
     -- The second arg (true) = return NULL if unset (not an error), making global queries safe
@@ -341,6 +375,8 @@
     CREATE POLICY ledger_accounts_isolation     ON ledger_accounts      FOR ALL USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
     CREATE POLICY ledger_transactions_isolation ON ledger_transactions   FOR ALL USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
     CREATE POLICY ledger_entries_isolation      ON ledger_entries        FOR ALL USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+    CREATE POLICY notifications_isolation       ON notifications         FOR ALL USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid OR tenant_id IS NULL);
+    CREATE POLICY notification_preferences_isolation ON notification_preferences FOR ALL USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
 
 
     -- =========================================================================
@@ -376,6 +412,22 @@
     AFTER INSERT OR UPDATE ON ledger_entries
     DEFERRABLE INITIALLY DEFERRED
     FOR EACH ROW EXECUTE FUNCTION check_ledger_balance();
+
+    -- =========================================================================
+    -- AUTOMATIC UPDATED_AT TRIGGER FOR DOCUMENTS
+    -- =========================================================================
+    CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+    BEGIN
+        NEW.updated_at = CURRENT_TIMESTAMP;
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS update_documents_updated_at ON documents;
+    CREATE TRIGGER update_documents_updated_at
+    BEFORE UPDATE ON documents
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 
     -- =========================================================================

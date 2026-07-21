@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Check, Copy, ShieldCheck, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Copy, ShieldCheck, Download, FilePlus, Loader } from 'lucide-react';
 import api from '../api';
 import { useToast } from '../context/ToastContext';
 import { useSettings } from '../context/SettingsContext';
 
-const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPayment }) => {
+const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPayment, onConvertQuote }) => {
   const { settings } = useSettings();
   const { showToast } = useToast();
   const [searchParams] = useSearchParams();
@@ -22,8 +22,24 @@ const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPay
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   
+  const [convertingId, setConvertingId] = useState(null);
+  
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDate, setFilterDate] = useState('all'); // could be "all", "this_month", "last_month" etc
+
+  const highlightId = searchParams.get('highlight');
+  const timestamp = searchParams.get('t');
+  const [highlightedRow, setHighlightedRow] = useState(null);
+
+  useEffect(() => {
+    if (highlightId) {
+      setHighlightedRow(highlightId);
+      const timer = setTimeout(() => {
+        setHighlightedRow(null);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightId, timestamp]);
 
   const currencySymbol = settings?.tax_config?.currencySymbol || '₹';
 
@@ -79,6 +95,7 @@ const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPay
     { key: 'accepted', label: 'Accepted' },
     { key: 'declined', label: 'Declined' },
     { key: 'paid', label: 'Paid' },
+    { key: 'rejected', label: 'Rejected' },
     { key: 'pending_verification', label: 'Pending Verification' },
     { key: 'overdue', label: 'Overdue' },
     { key: 'voided', label: 'Voided' }
@@ -130,6 +147,7 @@ const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPay
             <option value="draft">Draft</option>
             <option value="sent">Sent</option>
             <option value="paid">Paid</option>
+            <option value="rejected">Rejected</option>
             <option value="overdue">Overdue</option>
           </select>
           <button className="btn btn-secondary" style={{ padding: '0.3rem 1rem', fontSize: '0.85rem' }} onClick={() => loadData(true)}>
@@ -174,7 +192,13 @@ const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPay
               </thead>
               <tbody>
                 {documents.map(doc => (
-                  <tr key={doc.id}>
+                  <tr 
+                    key={doc.id}
+                    style={{ 
+                      transition: 'background-color 0.5s ease', 
+                      backgroundColor: highlightedRow === doc.id ? 'rgba(59, 130, 246, 0.25)' : '' 
+                    }}
+                  >
                     <td style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>{doc.document_number}</td>
                     <td>
                       <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{doc.client_name}</div>
@@ -202,6 +226,28 @@ const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPay
                             title="Verify Payment"
                           >
                             <ShieldCheck size={14} />
+                          </button>
+                        )}
+                        {doc.type === 'quote' && doc.status === 'accepted' && settings?.invoice_config?.quote?.actionOnAccept === 'none' && !doc.is_converted_to_invoice && (
+                          <button 
+                            className="btn btn-secondary" 
+                            style={{ padding: '0.4rem 0.5rem', opacity: convertingId === doc.id ? 0.7 : 1 }} 
+                            onClick={async () => {
+                              if (convertingId) return;
+                              setConvertingId(doc.id);
+                              await onConvertQuote(doc.id);
+                              setConvertingId(null);
+                              loadData(true);
+                            }}
+                            disabled={convertingId === doc.id}
+                            title="Send Invoice"
+                          >
+                            {convertingId === doc.id ? (
+                              <Loader size={14} style={{ marginRight: '0.2rem', animation: 'spin 1s linear infinite' }} />
+                            ) : (
+                              <FilePlus size={14} style={{ marginRight: '0.2rem' }} />
+                            )}
+                            {convertingId === doc.id ? 'Sending...' : 'Send Invoice'}
                           </button>
                         )}
                         <button className="btn btn-secondary" style={{ padding: '0.4rem 0.5rem' }} onClick={() => onViewDetails(doc.id)} title="View Document">

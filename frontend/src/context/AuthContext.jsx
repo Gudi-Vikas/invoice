@@ -22,6 +22,7 @@ const LS_USER         = 'invoice_saas_user';
 const LS_ACTIVE       = 'invoice_saas_active_tenant';
 const LS_ALL_TENANTS  = 'invoice_saas_all_tenants';
 const LS_IS_MASTER    = 'invoice_saas_is_master';
+const LS_MASTER_PERMS = 'invoice_saas_master_perms';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const safeParse = (key) => {
@@ -78,23 +79,26 @@ export const AuthProvider = ({ children }) => {
   const [activeTenant, setActiveTenant] = useState(null);
   const [allTenants, setAllTenants]     = useState([]);
   const [isMasterAdmin, setIsMasterAdmin] = useState(false);
+  const [masterPermissions, setMasterPermissions] = useState(null); // null = full access
   const [loading, setLoading]           = useState(true);
 
   const isAuthenticated = !!token && !!user;
 
   // ── Persist auth state to localStorage ──────────────────────────────────
-  const persistAuth = useCallback((tokenVal, userVal, tenantVal, tenantsVal, isMaster = false) => {
+  const persistAuth = useCallback((tokenVal, userVal, tenantVal, tenantsVal, isMaster = false, perms = null) => {
     localStorage.setItem(LS_TOKEN, tokenVal);
     localStorage.setItem(LS_USER, JSON.stringify(userVal));
     if (tenantVal) localStorage.setItem(LS_ACTIVE, JSON.stringify(tenantVal));
     if (tenantsVal) localStorage.setItem(LS_ALL_TENANTS, JSON.stringify(tenantsVal));
     localStorage.setItem(LS_IS_MASTER, JSON.stringify(isMaster));
+    localStorage.setItem(LS_MASTER_PERMS, JSON.stringify(perms));
 
     setToken(tokenVal);
     setUser(userVal);
     setActiveTenant(tenantVal);
     setAllTenants(tenantsVal || []);
     setIsMasterAdmin(isMaster);
+    setMasterPermissions(perms);
   }, []);
 
   const clearAuth = useCallback(() => {
@@ -103,11 +107,13 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem(LS_ACTIVE);
     localStorage.removeItem(LS_ALL_TENANTS);
     localStorage.removeItem(LS_IS_MASTER);
+    localStorage.removeItem(LS_MASTER_PERMS);
     setToken(null);
     setUser(null);
     setActiveTenant(null);
     setAllTenants([]);
     setIsMasterAdmin(false);
+    setMasterPermissions(null);
   }, []);
 
   // ── Hydrate state from localStorage on mount ───────────────────────────
@@ -119,6 +125,7 @@ export const AuthProvider = ({ children }) => {
       setActiveTenant(safeParse(LS_ACTIVE));
       setAllTenants(safeParse(LS_ALL_TENANTS) || []);
       setIsMasterAdmin(safeParse(LS_IS_MASTER) === true);
+      setMasterPermissions(safeParse(LS_MASTER_PERMS));
     } else if (storedToken) {
       // Token exists but expired — clear everything
       clearAuth();
@@ -163,8 +170,8 @@ export const AuthProvider = ({ children }) => {
     return data;
   };
 
-  const createTenant = async (name, domain) => {
-    const data = await authFetchWithToken('/auth/create-tenant', { name, domain });
+  const createTenant = async (name, domain, extraFields = {}) => {
+    const data = await authFetchWithToken('/auth/create-tenant', { name, domain, ...extraFields });
     const newTenant = data.activeTenant;
     const updatedTenants = [...allTenants, newTenant];
     persistAuth(data.token, data.user, newTenant, updatedTenants);
@@ -180,7 +187,7 @@ export const AuthProvider = ({ children }) => {
 
   const masterLogin = async (email, password) => {
     const data = await authFetch('/master/login', { email, password });
-    persistAuth(data.token, data.admin, null, [], true);
+    persistAuth(data.token, data.admin, null, [], true, data.admin.permissions ?? null);
     return data;
   };
 
@@ -195,6 +202,7 @@ export const AuthProvider = ({ children }) => {
       activeTenant,
       allTenants,
       isMasterAdmin,
+      masterPermissions,
       isAuthenticated,
       loading,
       login,

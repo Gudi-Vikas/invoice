@@ -16,6 +16,10 @@ export const TenantSwitcher = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTenantName, setNewTenantName] = useState('');
   const [newTenantDomain, setNewTenantDomain] = useState('');
+  const [newTenantEmail, setNewTenantEmail] = useState('');
+  const [newTenantAddress, setNewTenantAddress] = useState('');
+  const [newTenantWebsite, setNewTenantWebsite] = useState('');
+  const [newTenantExtraInfo, setNewTenantExtraInfo] = useState('');
   const [switching, setSwitching] = useState(false);
 
   const handleSwitch = async (tenantId) => {
@@ -42,11 +46,20 @@ export const TenantSwitcher = () => {
     if (!newTenantName.trim()) return;
 
     try {
-      await createTenant(newTenantName, newTenantDomain);
+      await createTenant(newTenantName, newTenantDomain, {
+        businessEmail: newTenantEmail,
+        address: newTenantAddress,
+        website: newTenantWebsite,
+        extraInfo: newTenantExtraInfo
+      });
       showToast('Workspace created! Switching context...', 'success');
       setShowCreateModal(false);
       setNewTenantName('');
       setNewTenantDomain('');
+      setNewTenantEmail('');
+      setNewTenantAddress('');
+      setNewTenantWebsite('');
+      setNewTenantExtraInfo('');
       window.location.reload();
     } catch (err) {
       showToast(err.message, 'error');
@@ -86,7 +99,7 @@ export const TenantSwitcher = () => {
       {/* Dropdown */}
       {open && (
         <div style={{
-          position: 'absolute', bottom: '110%', left: 0, right: 0,
+          position: 'absolute', top: '110%', left: 0, right: 0,
           background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
           borderRadius: '12px', boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)',
           overflow: 'hidden', zIndex: 200, animation: 'fadeIn 0.15s ease'
@@ -144,30 +157,74 @@ export const TenantSwitcher = () => {
       {/* Create Modal */}
       {showCreateModal && (
         <div className="modal-overlay">
-          <div className="glass-card modal-card" style={{ '--modal-width': '480px' }}>
+          <div className="glass-card modal-card" style={{ '--modal-width': '550px' }}>
             <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1.25rem' }}>
               Create New Workspace
             </h3>
             <form onSubmit={handleCreate}>
-              <div className="form-group">
-                <label className="form-label">Workspace Name *</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Workspace Name *</label>
+                  <input
+                    type="text" className="form-input"
+                    placeholder="My New Business"
+                    value={newTenantName}
+                    onChange={(e) => setNewTenantName(e.target.value)}
+                    required autoFocus
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Custom Domain</label>
+                  <input
+                    type="text" className="form-input"
+                    placeholder="mybusiness.com (optional)"
+                    value={newTenantDomain}
+                    onChange={(e) => setNewTenantDomain(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Business Email</label>
+                  <input
+                    type="email" className="form-input"
+                    placeholder="billing@mybusiness.com"
+                    value={newTenantEmail}
+                    onChange={(e) => setNewTenantEmail(e.target.value)}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Website</label>
+                  <input
+                    type="text" className="form-input"
+                    placeholder="https://..."
+                    value={newTenantWebsite}
+                    onChange={(e) => setNewTenantWebsite(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label">Business Address</label>
+                <textarea
+                  className="form-input" rows="2"
+                  placeholder="Street, City, State, ZIP"
+                  value={newTenantAddress}
+                  onChange={(e) => setNewTenantAddress(e.target.value)}
+                ></textarea>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">Tax ID / Extra Info</label>
                 <input
                   type="text" className="form-input"
-                  placeholder="My New Business"
-                  value={newTenantName}
-                  onChange={(e) => setNewTenantName(e.target.value)}
-                  required autoFocus
+                  placeholder="GSTIN, Company Reg No, etc."
+                  value={newTenantExtraInfo}
+                  onChange={(e) => setNewTenantExtraInfo(e.target.value)}
                 />
               </div>
-              <div className="form-group">
-                <label className="form-label">Domain (optional)</label>
-                <input
-                  type="text" className="form-input"
-                  placeholder="mybusiness.com"
-                  value={newTenantDomain}
-                  onChange={(e) => setNewTenantDomain(e.target.value)}
-                />
-              </div>
+
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>
                   Cancel

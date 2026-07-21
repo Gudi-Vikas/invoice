@@ -17,6 +17,14 @@ export const clientController = {
 
     try {
       const newClient = await runInTransaction(req.tenantId, async (client) => {
+        const existing = await client.query(
+          `SELECT id FROM clients WHERE tenant_id = $1 AND email = $2`,
+          [req.tenantId, email]
+        );
+        if (existing.rows.length > 0) {
+          throw Object.assign(new Error('A client with this email already exists.'), { status: 409 });
+        }
+
         const insertRes = await client.query(
           `INSERT INTO clients (tenant_id, name, email, billing_address, extra_info)
            VALUES ($1, $2, $3, $4, $5)
@@ -123,6 +131,16 @@ export const clientController = {
 
     try {
       const updated = await runInTransaction(req.tenantId, async (client) => {
+        if (email) {
+          const existing = await client.query(
+            `SELECT id FROM clients WHERE tenant_id = $1 AND email = $2 AND id != $3`,
+            [req.tenantId, email, id]
+          );
+          if (existing.rows.length > 0) {
+            throw Object.assign(new Error('A client with this email already exists.'), { status: 409 });
+          }
+        }
+
         const updateRes = await client.query(
           `UPDATE clients
            SET name = COALESCE($1, name),

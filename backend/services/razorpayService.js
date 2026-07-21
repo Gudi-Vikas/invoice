@@ -326,7 +326,74 @@ export const razorpayService = {
   },
 
   /**
-   * 9. Creates a direct transfer from the merchant's account balance to a linked account.
+   * 9. Creates a Razorpay Plan for subscription billing.
+   * Plans are required by the Razorpay Subscriptions API before creating subscriptions.
+   *
+   * @param {Object} params
+   * @param {string} params.name - Plan display name
+   * @param {string} params.description - Plan description
+   * @param {number} params.amountInRupees - Monthly price in rupees
+   * @param {string} [params.interval='monthly'] - 'monthly' or 'yearly'
+   * @param {number} [params.period=1] - Interval multiplier (e.g., 1 month, 12 months)
+   * @returns {Object} Razorpay Plan object with { id, ... }
+   */
+  createRazorpayPlan: async ({ name, description, amountInRupees, interval = 'monthly', period = 1 }) => {
+    const amountInPaise = Math.round(parseFloat(amountInRupees) * 100);
+    console.log(`[Razorpay Service] Creating plan: ${name} — ₹${amountInRupees} (${amountInPaise} paise) per ${period} ${interval}`);
+
+    if (isMockMode) {
+      const mockPlanId = `plan_${crypto.randomBytes(8).toString('hex')}`;
+      return {
+        id: mockPlanId,
+        entity: 'plan',
+        interval: period,
+        period: interval,
+        item: { id: `item_${crypto.randomBytes(8).toString('hex')}`, name, amount: amountInPaise, currency: 'INR' },
+        notes: [],
+        created_at: Math.floor(Date.now() / 1000)
+      };
+    }
+
+    try {
+      const response = await razorpayClient.plans.create({
+        period: interval,
+        interval: period,
+        item: {
+          name,
+          amount: amountInPaise,
+          currency: 'INR',
+          description: description || name
+        },
+        notes: {
+          platform: 'ultrakey_invoice_saas'
+        }
+      });
+      console.log(`[Razorpay Service] Plan created: ${response.id}`);
+      return response;
+    } catch (err) {
+      console.error('Razorpay plan creation error:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * 10. Fetches a Razorpay Plan by its ID.
+   */
+  fetchRazorpayPlan: async (planId) => {
+    if (isMockMode) {
+      return { id: planId, entity: 'plan', period: 'monthly', interval: 1 };
+    }
+
+    try {
+      return await razorpayClient.plans.fetch(planId);
+    } catch (err) {
+      console.error('Razorpay plan fetch error:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * 11. Creates a direct transfer from the merchant's account balance to a linked account.
    */
   createDirectTransfer: async (accountId, amountInRupees) => {
     const amountInPaise = Math.round(parseFloat(amountInRupees) * 100);

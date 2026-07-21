@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { runInTransaction, runWithoutRLS } from '../config/db.js';
 import { initializeLedgerAccounts } from '../services/ledgerService.js';
+import eventBus from '../services/eventBus.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const INVITE_TTL_HOURS = 72;
@@ -124,8 +125,12 @@ const buildDefaultSettings = (name, email) => ({
  * @param {string} tenantName
  * @param {string} adminEmail
  */
-const seedNewTenant = async (client, tenantId, tenantName, adminEmail) => {
+const seedNewTenant = async (client, tenantId, tenantName, adminEmail, extraBusinessInfo = {}) => {
   const defaults = buildDefaultSettings(tenantName, adminEmail);
+
+  if (extraBusinessInfo) {
+    defaults.business_info = { ...defaults.business_info, ...extraBusinessInfo };
+  }
 
   await client.query(
     `INSERT INTO tenant_settings
@@ -270,6 +275,11 @@ export const authController = {
 
       const token = issueToken(result.user, { ...result.tenant, role: 'admin' });
 
+      eventBus.emit('tenant.created', {
+        tenantId: result.tenant.id,
+        name: result.tenant.name
+      });
+
       return res.status(201).json({
         message: 'Onboarding completed successfully.',
         token,
@@ -315,7 +325,7 @@ export const authController = {
         // If all of a user's tenants are suspended they will hit the check below
         // and receive a clear "workspace suspended" message.
         const tenantsRes = await client.query(
-          `SELECT t.id, t.name, t.domain, tu.role, t.status
+          `SELECT t.id, t.name, t.domain, tu.role, tu.permissions, t.status
            FROM tenants t
            JOIN tenant_users tu ON t.id = tu.tenant_id
            WHERE tu.user_id = $1
@@ -384,7 +394,7 @@ export const authController = {
       // current JWT may be scoped to a different tenant than the one being switched to.
       const memberRes = await runWithoutRLS(async (client) => {
         return client.query(
-          `SELECT t.id, t.name, t.domain, tu.role
+          `SELECT t.id, t.name, t.domain, tu.role, tu.permissions
            FROM tenants t
            JOIN tenant_users tu ON t.id = tu.tenant_id
            WHERE tu.user_id = $1 AND t.id = $2`,
@@ -416,7 +426,7 @@ export const authController = {
   //    (via ON CONFLICT UPDATE) so the admin can resend without errors.
   // ─────────────────────────────────────────────────────────────────────────
   invite: async (req, res, next) => {
-    const { email, role = 'member' } = req.body;
+    const { email, role = 'member', permissions = null } = req.body;
     const tenantId = req.tenantId;
     const invitedBy = req.user.id;
 
@@ -453,17 +463,18 @@ export const authController = {
 
         // Upsert: if a pending invite already exists for this (tenant, email), refresh it
         const inviteRes = await client.query(
-          `INSERT INTO tenant_invites (tenant_id, invited_by, email, role, expires_at)
-           VALUES ($1, $2, $3, $4, $5)
+          `INSERT INTO tenant_invites (tenant_id, invited_by, email, role, permissions, expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6)
            ON CONFLICT ON CONSTRAINT unique_pending_invite
            DO UPDATE SET
              role       = EXCLUDED.role,
+             permissions = EXCLUDED.permissions,
              invited_by = EXCLUDED.invited_by,
              token      = gen_random_uuid(),
              expires_at = EXCLUDED.expires_at,
              used_at    = NULL
            RETURNING token, expires_at`,
-          [tenantId, invitedBy, email, role, expiresAt]
+          [tenantId, invitedBy, email, role, permissions ? JSON.stringify(permissions) : null, expiresAt]
         );
 
         const { token: invToken, expires_at: expiresAtResult } = inviteRes.rows[0];
@@ -587,9 +598,9 @@ export const authController = {
           );
           if (alreadyLinked.rows.length === 0) {
             await client.query(
-              `INSERT INTO tenant_users (tenant_id, user_id, role)
-               VALUES ($1, $2, $3)`,
-              [invite.tenant_id, user.id, invite.role]
+              `INSERT INTO tenant_users (tenant_id, user_id, role, permissions)
+               VALUES ($1, $2, $3, $4)`,
+              [invite.tenant_id, user.id, invite.role, invite.permissions]
             );
           }
         } else {
@@ -604,9 +615,9 @@ export const authController = {
           user = userInsert.rows[0];
 
           await client.query(
-            `INSERT INTO tenant_users (tenant_id, user_id, role)
-             VALUES ($1, $2, $3)`,
-            [invite.tenant_id, user.id, invite.role]
+            `INSERT INTO tenant_users (tenant_id, user_id, role, permissions)
+             VALUES ($1, $2, $3, $4)`,
+            [invite.tenant_id, user.id, invite.role, invite.permissions]
           );
         }
 
@@ -622,7 +633,8 @@ export const authController = {
             id: invite.tenant_id,
             name: invite.tenant_name,
             domain: invite.tenant_domain,
-            role: invite.role
+            role: invite.role,
+            permissions: invite.permissions
           }
         };
       });
@@ -648,9 +660,10 @@ export const authController = {
   //    Requires: authenticateToken (any valid JWT).
   // ─────────────────────────────────────────────────────────────────────────
   createTenant: async (req, res, next) => {
-    const { name, domain } = req.body;
+    const { name, domain, address, website, extraInfo, businessEmail } = req.body;
     const userId = req.user.id;
-    const email = req.user.email;
+    // Default to the user's login email if businessEmail is not provided
+    const email = businessEmail || req.user.email;
 
     if (!name) {
       return res.status(400).json({ error: 'Tenant name is required.' });
@@ -694,18 +707,27 @@ export const authController = {
         );
 
         // C. Seed settings, ledger accounts, and starter subscription
-        await seedNewTenant(client, tenantId, name, email);
+        await seedNewTenant(client, tenantId, name, email, {
+          address: address || '',
+          website: website || '',
+          extraInfo: extraInfo || ''
+        });
 
-        return { tenant, user: { id: userId, email } };
+        return { tenant, user: { id: userId, email: req.user.email } };
       });
 
-      const token = issueToken(result.user, { ...result.tenant, role: 'admin' });
+      const token = issueToken(result.user, { ...result.tenant, role: 'admin', permissions: null });
+
+      eventBus.emit('tenant.created', {
+        tenantId: result.tenant.id,
+        name: result.tenant.name
+      });
 
       return res.status(201).json({
         message: 'Tenant workspace created successfully.',
         token,
         user: result.user,
-        activeTenant: { ...result.tenant, role: 'admin' }
+        activeTenant: { ...result.tenant, role: 'admin', permissions: null }
       });
     } catch (err) {
       if (err.statusCode) {
@@ -719,7 +741,7 @@ export const authController = {
     try {
       const usersList = await runInTransaction(req.tenantId, async (client) => {
         const result = await client.query(
-          `SELECT u.id, u.email, tu.role, u.created_at
+          `SELECT u.id, u.email, tu.role, tu.permissions, u.created_at
            FROM tenant_users tu
            JOIN users u ON u.id = tu.user_id
            WHERE tu.tenant_id = $1
@@ -731,6 +753,68 @@ export const authController = {
 
       return res.json(usersList);
     } catch (err) {
+      next(err);
+    }
+  },
+
+  updateUserPermissions: async (req, res, next) => {
+    try {
+      const { userId } = req.params;
+      const { permissions } = req.body; // array of strings or null
+
+      if (userId === req.user.id) {
+        return res.status(400).json({ error: 'Cannot modify your own permissions.' });
+      }
+
+      await runInTransaction(req.tenantId, async (client) => {
+        const result = await client.query(
+          `UPDATE tenant_users 
+           SET permissions = $1 
+           WHERE tenant_id = $2 AND user_id = $3
+           RETURNING *`,
+          [permissions ? JSON.stringify(permissions) : null, req.tenantId, userId]
+        );
+
+        if (result.rows.length === 0) {
+          throw Object.assign(new Error('User not found in this workspace.'), { statusCode: 404 });
+        }
+      });
+
+      return res.json({ message: 'Permissions updated successfully.' });
+    } catch (err) {
+      if (err.statusCode) {
+        return res.status(err.statusCode).json({ error: err.message });
+      }
+      next(err);
+    }
+  },
+
+  removeUser: async (req, res, next) => {
+    try {
+      const { userId } = req.params;
+
+      if (userId === req.user.id) {
+        return res.status(400).json({ error: 'Cannot remove yourself from the workspace.' });
+      }
+
+      await runInTransaction(req.tenantId, async (client) => {
+        const result = await client.query(
+          `DELETE FROM tenant_users 
+           WHERE tenant_id = $1 AND user_id = $2
+           RETURNING *`,
+          [req.tenantId, userId]
+        );
+
+        if (result.rows.length === 0) {
+          throw Object.assign(new Error('User not found in this workspace.'), { statusCode: 404 });
+        }
+      });
+
+      return res.json({ message: 'User removed from workspace successfully.' });
+    } catch (err) {
+      if (err.statusCode) {
+        return res.status(err.statusCode).json({ error: err.message });
+      }
       next(err);
     }
   }

@@ -4,16 +4,31 @@
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
 
+// In-memory cache for GET requests
+const cache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Core HTTP request handler.
  * Automatically attaches Authorization and x-tenant-id headers.
  * Dispatches auth:logout event on 401/403 responses.
  */
 const request = async (url, options = {}) => {
+  const method = options.method || 'GET';
+  
   const token = localStorage.getItem('invoice_saas_token') || '';
   const activeTenant = (() => {
     try { return JSON.parse(localStorage.getItem('invoice_saas_active_tenant')); } catch { return null; }
   })();
+
+  // Check cache for GET requests
+  const cacheKey = `${activeTenant?.id || 'global'}:${url}`;
+  if (method === 'GET') {
+    const cached = cache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.data;
+    }
+  }
 
   const isFormData = options.body instanceof FormData;
   const headers = {
@@ -42,7 +57,17 @@ const request = async (url, options = {}) => {
     throw new Error(errBody.error || `HTTP error! Status: ${res.status}`);
   }
 
-  return await res.json();
+  const data = await res.json();
+
+  // Cache successful GET responses
+  if (method === 'GET') {
+    cache.set(cacheKey, { data, timestamp: Date.now() });
+  } else {
+    // Invalidate cache on mutations (POST, PUT, PATCH, DELETE) to ensure freshness
+    cache.clear();
+  }
+
+  return data;
 };
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -89,6 +114,8 @@ export const api = {
     request('/documents', { method: 'POST', body: JSON.stringify(data) }),
   updateDocumentStatus: (id, status) =>
     request(`/documents/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  convertQuoteToInvoice: (id) =>
+    request(`/documents/${id}/convert`, { method: 'POST' }),
   deleteDocument: (id) =>
     request(`/documents/${id}`, { method: 'DELETE' }),
   getMagicToken: (id) => request(`/documents/${id}/token`),
@@ -163,6 +190,10 @@ export const api = {
   masterListAdmins: () => request('/master/admins'),
   masterToggleAdmin: (id) =>
     request(`/master/admins/${id}/toggle`, { method: 'PATCH', body: JSON.stringify({}) }),
+  masterCreateAdmin: (data) =>
+    request('/master/admins', { method: 'POST', body: JSON.stringify(data) }),
+  masterUpdateAdminPermissions: (id, permissions) =>
+    request(`/master/admins/${id}/permissions`, { method: 'PATCH', body: JSON.stringify({ permissions }) }),
   masterGenerateBilling: (data) =>
     request('/master/billing/generate', { method: 'POST', body: JSON.stringify(data) }),
   masterListBilling: (params = {}) => {
@@ -178,12 +209,43 @@ export const api = {
     request('/master/billing/mark-overdue', { method: 'POST', body: JSON.stringify({}) }),
   masterTenantBilling: (tenantId) => request(`/master/billing/tenant/${tenantId}`),
 
+  // ── Master Plan Management ─────────────────────────────────────────────
+  masterListPlans: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/master/plans${qs ? '?' + qs : ''}`);
+  },
+  masterCreatePlan: (data) =>
+    request('/master/plans', { method: 'POST', body: JSON.stringify(data) }),
+  masterUpdatePlan: (id, data) =>
+    request(`/master/plans/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  masterArchivePlan: (id) =>
+    request(`/master/plans/${id}/archive`, { method: 'PATCH', body: JSON.stringify({}) }),
+  masterRestorePlan: (id) =>
+    request(`/master/plans/${id}/restore`, { method: 'PATCH', body: JSON.stringify({}) }),
+
   // ── Auth (used by AuthContext, exposed here for completeness) ──────────
   invite: (data, tenantId = null) => {
     const headers = tenantId ? { 'x-tenant-id': tenantId } : {};
     return request('/auth/invite', { method: 'POST', headers, body: JSON.stringify(data) });
   },
-  listTeamUsers: () => request('/auth/users')
+  listTeamUsers: () => request('/auth/users'),
+  updateTeamUserPermissions: (id, permissions) => 
+    request(`/auth/users/${id}/permissions`, { method: 'PUT', body: JSON.stringify({ permissions }) }),
+  removeTeamUser: (id) =>
+    request(`/auth/users/${id}`, { method: 'DELETE' }),
+
+  // ── Notification Badges & Feed ──────────────────────────────────────────────
+  getNotificationCounts: () => request('/documents/notifications'),
+  getMasterNotifications: () => request('/master/notifications'),
+  getNotifications: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/notifications${qs ? '?' + qs : ''}`);
+  },
+  markAllNotificationsAsRead: () => request('/notifications/read-all', { method: 'PATCH', body: JSON.stringify({}) }),
+  markNotificationAsRead: (id) => request(`/notifications/${id}/read`, { method: 'PATCH', body: JSON.stringify({}) }),
+  deleteAllNotifications: () => request('/notifications/delete-all', { method: 'DELETE', body: JSON.stringify({}) }),
+  deleteNotification: (id) => request(`/notifications/${id}`, { method: 'DELETE' })
+
 };
 
 export default api;

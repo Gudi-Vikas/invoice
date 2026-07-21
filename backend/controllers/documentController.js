@@ -3,6 +3,7 @@ import { runInTransaction } from '../config/db.js';
 import { getNextDocumentNumber } from '../utils/sequence.js';
 import { postInvoiceLedger, postPaymentLedger } from '../services/ledgerService.js';
 import emailService from '../services/emailService.js';
+import eventBus from '../services/eventBus.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -122,9 +123,122 @@ export const documentController = {
         return savedDoc;
       });
 
+      eventBus.emit('document.created', {
+        tenantId: req.tenantId,
+        type: newDoc.type,
+        documentNumber: newDoc.document_number,
+        documentId: newDoc.id
+      });
+
       return res.status(201).json({
         message: `${type.charAt(0).toUpperCase() + type.slice(1)} generated successfully.`,
         data: newDoc
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * 1b. Converts an accepted quotation into a new invoice.
+   */
+  convertToInvoice: async (req, res, next) => {
+    const { id } = req.params;
+    try {
+      const newInvoice = await runInTransaction(req.tenantId, async (client) => {
+        // Fetch the quote
+        const quoteRes = await client.query(
+          `SELECT * FROM documents WHERE tenant_id = $1 AND id = $2 AND type = 'quote'`,
+          [req.tenantId, id]
+        );
+
+        if (quoteRes.rows.length === 0) {
+          throw Object.assign(new Error('Quotation not found.'), { status: 404 });
+        }
+
+        const quote = quoteRes.rows[0];
+
+        // Fetch settings
+        const settingsRes = await client.query(
+          `SELECT invoice_config FROM tenant_settings WHERE tenant_id = $1`,
+          [req.tenantId]
+        );
+        const invSettings = settingsRes.rows[0]?.invoice_config?.invoice || {};
+
+        // Generate invoice number
+        const docNumber = await getNextDocumentNumber(client, req.tenantId, 'invoice');
+
+        // Due date
+        const invoiceDueDate = new Date();
+        invoiceDueDate.setDate(invoiceDueDate.getDate() + parseInt(invSettings.dueDateDays || 14, 10));
+
+        // Create Invoice
+        const invoiceRes = await client.query(
+          `INSERT INTO documents
+             (tenant_id, client_id, type, document_number, status, sub_total, discount_amount, tax_amount, total_due, due_date, notes)
+           VALUES ($1, $2, 'invoice', $3, 'published', $4, $5, $6, $7, $8, $9)
+           RETURNING *`,
+          [
+            req.tenantId,
+            quote.client_id,
+            docNumber,
+            quote.sub_total,
+            quote.discount_amount || 0,
+            quote.tax_amount,
+            quote.total_due,
+            invoiceDueDate,
+            quote.notes || null
+          ]
+        );
+        const invoice = invoiceRes.rows[0];
+
+        // Clone lines
+        const linesRes = await client.query(
+          `SELECT * FROM document_lines WHERE tenant_id = $1 AND document_id = $2`,
+          [req.tenantId, id]
+        );
+
+        for (const line of linesRes.rows) {
+          await client.query(
+            `INSERT INTO document_lines
+               (document_id, tenant_id, quantity, description, unit_price, adjust, amount, vendor_id, sort_order)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [
+              invoice.id,
+              req.tenantId,
+              line.quantity,
+              line.description,
+              line.unit_price,
+              line.adjust || 0,
+              line.amount,
+              line.vendor_id,
+              line.sort_order || 0
+            ]
+          );
+        }
+
+        // Post to ledger
+        await postInvoiceLedger(client, req.tenantId, docNumber, quote.sub_total, quote.tax_amount, quote.total_due, invoice.id);
+
+        // Mark quote as converted
+        await client.query(
+          `UPDATE documents SET is_converted_to_invoice = true WHERE tenant_id = $1 AND id = $2`,
+          [req.tenantId, id]
+        );
+
+        return invoice;
+      });
+
+      eventBus.emit('document.created', {
+        tenantId: req.tenantId,
+        type: 'invoice',
+        documentNumber: newInvoice.document_number,
+        documentId: newInvoice.id
+      });
+
+      return res.status(201).json({
+        message: 'Quotation successfully converted to an invoice.',
+        data: newInvoice
       });
     } catch (err) {
       next(err);
@@ -146,6 +260,7 @@ export const documentController = {
           SELECT d.id, d.type, d.document_number, d.status,
                  d.sub_total, d.discount_amount, d.tax_amount, d.total_due,
                  d.due_date, d.issue_date, d.created_at, d.razorpay_order_id, d.offline_payment_info,
+                 d.is_converted_to_invoice,
                  c.name as client_name, c.email as client_email
           FROM documents d
           JOIN clients c ON d.client_id = c.id
@@ -677,6 +792,106 @@ export const documentController = {
         message: `Document emailed successfully to ${emailResult.recipient}.`,
         data: emailResult
       });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  /**
+   * 9. Returns notification badge counts for the sidebar.
+   * Aggregates: pendingQuotes, overdueInvoices, unpaidInvoices.
+   * Also returns subscription expiry info for the Subscription nav badge.
+   */
+  getNotificationCounts: async (req, res, next) => {
+    try {
+      const counts = await runInTransaction(req.tenantId, async (client) => {
+        const result = await client.query(
+          `SELECT
+             COUNT(*) FILTER (WHERE type = 'quote'   AND status = 'sent')    AS pending_quotes,
+             COUNT(*) FILTER (WHERE type = 'invoice' AND status = 'overdue') AS overdue_invoices,
+             COUNT(*) FILTER (WHERE type = 'invoice' AND status = 'sent')    AS unpaid_invoices,
+             COUNT(*) FILTER (WHERE type = 'invoice' AND status = 'pending_verification') AS pending_verification_invoices
+           FROM documents
+           WHERE tenant_id = $1`,
+          [req.tenantId]
+        );
+
+        // Fetch subscription status for expiry badge
+        const subResult = await client.query(
+          `SELECT status, current_period_end, plan_id
+           FROM subscriptions
+           WHERE tenant_id = $1
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [req.tenantId]
+        );
+
+        const row = result.rows[0];
+        const sub = subResult.rows[0] || null;
+
+        let subscription = null;
+        if (sub) {
+          const periodEnd = sub.current_period_end ? new Date(sub.current_period_end) : null;
+          const daysRemaining = periodEnd
+            ? Math.ceil((periodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+            : null;
+          subscription = {
+            status: sub.status,
+            daysRemaining,
+            expiresAt: periodEnd ? periodEnd.toISOString() : null
+          };
+        }
+
+        const feedQuery = await client.query(
+          `SELECT id, type, document_number, status, due_date, total_due, client_id
+           FROM documents
+           WHERE tenant_id = $1 
+             AND ((type = 'quote' AND status IN ('sent', 'accepted')) 
+               OR (type = 'invoice' AND status IN ('overdue', 'pending_verification')))
+           ORDER BY updated_at DESC
+           LIMIT 15`,
+          [req.tenantId]
+        );
+
+        const feed = feedQuery.rows.map(doc => ({
+          id: doc.id,
+          type: doc.type,
+          title: doc.type === 'quote' 
+            ? doc.status === 'accepted' 
+              ? `Quote ${doc.document_number} accepted` 
+              : `Quote ${doc.document_number} pending review`
+            : doc.status === 'overdue' 
+              ? `Invoice ${doc.document_number} is overdue`
+              : `Invoice ${doc.document_number} pending UTR verification`,
+          message: `Total: ₹${parseFloat(doc.total_due).toFixed(2)}`,
+          actionUrl: doc.type === 'quote' ? `/quotes/${doc.id}` : `/invoices/${doc.id}`,
+          date: doc.due_date,
+          status: doc.status
+        }));
+
+        if (subscription && subscription.daysRemaining !== null && subscription.daysRemaining <= 14) {
+          feed.unshift({
+            id: 'sub-alert',
+            type: 'subscription',
+            title: `Subscription Expires in ${subscription.daysRemaining} days`,
+            message: 'Please renew your subscription to avoid service interruption.',
+            actionUrl: '/subscription',
+            date: subscription.expiresAt,
+            status: 'warning'
+          });
+        }
+
+        return {
+          pendingQuotes:               parseInt(row.pending_quotes,                10),
+          overdueInvoices:             parseInt(row.overdue_invoices,              10),
+          unpaidInvoices:              parseInt(row.unpaid_invoices,               10),
+          pendingVerificationInvoices: parseInt(row.pending_verification_invoices, 10),
+          subscription,
+          feed
+        };
+      });
+
+      return res.json(counts);
     } catch (err) {
       next(err);
     }

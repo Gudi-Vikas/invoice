@@ -1,5 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
@@ -16,6 +17,8 @@ import DocumentListTable from './DocumentListTable';
  * Uses SettingsContext — no redundant getSettings() calls.
  */
 export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => {
+  const { id } = useParams();
+  const navigate = useNavigate();
   const { settings } = useSettings();
   const { showToast } = useToast();
   const [view, setView] = useState(initialView);
@@ -37,6 +40,8 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
   const [showClientModal, setShowClientModal] = useState(false);
   const [newClientName, setNewClientName] = useState('');
   const [newClientEmail, setNewClientEmail] = useState('');
+  const [newClientBilling, setNewClientBilling] = useState({ street: '', city: '', state: '', zip: '' });
+  const [newClientExtraInfo, setNewClientExtraInfo] = useState('');
 
   // Form states
   const [formType, setFormType] = useState(defaultType);
@@ -77,10 +82,17 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
     e.preventDefault();
     if (!newClientName || !newClientEmail) return;
     try {
-      const res = await api.createClient({ name: newClientName, email: newClientEmail });
+      const res = await api.createClient({ 
+        name: newClientName, 
+        email: newClientEmail,
+        billingAddress: newClientBilling,
+        extraInfo: newClientExtraInfo
+      });
       setClients(prev => [...prev, res.data]);
       setFormClientId(res.data.id);
       setNewClientName(''); setNewClientEmail('');
+      setNewClientBilling({ street: '', city: '', state: '', zip: '' });
+      setNewClientExtraInfo('');
       setShowClientModal(false);
     } catch (err) {
       showToast('Failed to register client: ' + err.message, 'error');
@@ -160,7 +172,7 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
     }
   };
 
-  const viewDetails = async (docId) => {
+  const viewDetails = useCallback(async (docId) => {
     try {
       const data = await api.getDocument(docId);
       setDocDetails(data);
@@ -169,7 +181,17 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
     } catch (err) {
       showToast('Failed to load document details: ' + err.message, 'error');
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    if (id) {
+      viewDetails(id);
+    } else {
+      setView(initialView);
+      setSelectedDocId(null);
+      setDocDetails(null);
+    }
+  }, [id, initialView, viewDetails]);
 
   const handleCopyMagicLink = async (doc) => {
     try {
@@ -221,6 +243,16 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
     }
   };
 
+  const handleConvertQuote = async (docId) => {
+    try {
+      await api.convertQuoteToInvoice(docId);
+      showToast('Quotation successfully converted to Invoice!', 'success');
+      loadDocuments();
+    } catch (err) {
+      showToast('Failed to convert quote: ' + err.message, 'error');
+    }
+  };
+
   const currencySymbol = settings?.tax_config?.currencySymbol || '₹';
   const predefinedItems = settings?.general_config?.predefinedLineItems || [];
 
@@ -249,6 +281,7 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
             onViewDetails={viewDetails}
             onCopyLink={handleCopyMagicLink}
             onVerifyPayment={setVerifyingDoc}
+            onConvertQuote={handleConvertQuote}
           />
         </div>
       )}
@@ -436,7 +469,13 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
       {view === 'details' && docDetails && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-            <button className="btn btn-secondary" onClick={() => setView('list')}>
+            <button className="btn btn-secondary" onClick={() => {
+              if (id) {
+                navigate(defaultType === 'quote' ? '/quotes' : '/invoices');
+              } else {
+                setView('list');
+              }
+            }}>
               <ArrowLeft size={16} /> Back to Grid
             </button>
             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
@@ -493,7 +532,7 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
                 <button 
                   className="btn btn-secondary" 
                   style={{ color: 'var(--accent-danger)', borderColor: 'var(--accent-danger)' }}
-                  onClick={() => handleStatusChange(docDetails.id, 'sent')} 
+                  onClick={() => handleStatusChange(docDetails.id, 'rejected')} 
                   disabled={updatingStatus === docDetails.id}
                 >
                   Reject Payment
@@ -799,17 +838,45 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
       {/* ==================== CLIENT QUICK-ADD MODAL ==================== */}
       {showClientModal && (
         <div className="modal-overlay">
-          <div className="glass-card modal-card" style={{ width: '400px' }}>
+          <div className="glass-card modal-card" style={{ width: '480px' }}>
             <h3 style={{ fontSize: '1.25rem', marginBottom: '1.25rem' }}>Register New Client</h3>
             <form onSubmit={handleCreateClient}>
-              <div className="form-group">
-                <label className="form-label">Client Name</label>
-                <input type="text" className="form-input" value={newClientName} onChange={e => setNewClientName(e.target.value)} placeholder="e.g. Vikas Sharma" required />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Client Name *</label>
+                  <input type="text" className="form-input" value={newClientName} onChange={e => setNewClientName(e.target.value)} placeholder="e.g. Vikas Sharma" required />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Email *</label>
+                  <input type="email" className="form-input" value={newClientEmail} onChange={e => setNewClientEmail(e.target.value)} placeholder="name@company.com" required />
+                </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">Email</label>
-                <input type="email" className="form-input" value={newClientEmail} onChange={e => setNewClientEmail(e.target.value)} placeholder="name@company.com" required />
+              
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label">Street Address</label>
+                <input type="text" className="form-input" value={newClientBilling.street} onChange={e => setNewClientBilling(prev => ({ ...prev, street: e.target.value }))} placeholder="123 Business Rd, Suite 100" />
               </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">City</label>
+                  <input type="text" className="form-input" value={newClientBilling.city} onChange={e => setNewClientBilling(prev => ({ ...prev, city: e.target.value }))} placeholder="City" />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">State</label>
+                  <input type="text" className="form-input" value={newClientBilling.state} onChange={e => setNewClientBilling(prev => ({ ...prev, state: e.target.value }))} placeholder="State" />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">ZIP Code</label>
+                  <input type="text" className="form-input" value={newClientBilling.zip} onChange={e => setNewClientBilling(prev => ({ ...prev, zip: e.target.value }))} placeholder="ZIP" />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Extra Info / GSTIN</label>
+                <textarea className="form-input" rows="2" value={newClientExtraInfo} onChange={e => setNewClientExtraInfo(e.target.value)} placeholder="Additional billing details, GSTIN, etc."></textarea>
+              </div>
+
               <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowClientModal(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Create Client</button>
@@ -866,7 +933,7 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
                 className="btn btn-secondary" 
                 style={{ color: 'var(--accent-danger)', borderColor: 'var(--accent-danger)', display: 'flex', alignItems: 'center', gap: '0.25rem' }} 
                 onClick={() => {
-                  handleStatusChange(verifyingDoc.id, 'sent');
+                  handleStatusChange(verifyingDoc.id, 'rejected');
                   setVerifyingDoc(null);
                 }}
                 disabled={updatingStatus === verifyingDoc.id}

@@ -23,6 +23,7 @@
     "pg": "^8.21.0",
     "razorpay": "^2.9.6",
     "sanitize-html": "^2.17.4",
+    "socket.io": "^4.8.3",
     "validator": "^13.15.35"
   },
   "devDependencies": {

@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { ToastProvider } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { NotificationProvider } from './context/NotificationContext';
 
 // Auth Pages
 import LoginPage from './components/auth/LoginPage';
@@ -14,7 +15,6 @@ import TenantLayout from './components/TenantLayout';
 import Dashboard from './components/Dashboard';
 import Clients from './components/Clients';
 import Documents from './components/Documents';
-import Vendors from './components/Vendors';
 import Settings from './components/Settings';
 import SubscriptionPage from './components/SubscriptionPage';
 import Team from './components/Team';
@@ -30,6 +30,7 @@ import MasterTenants from './components/master/MasterTenants';
 import MasterTenantDetail from './components/master/MasterTenantDetail';
 import MasterBilling from './components/master/MasterBilling';
 import MasterAdmins from './components/master/MasterAdmins';
+import MasterPlans from './components/master/MasterPlans';
 
 /**
  * Main Application Shell.
@@ -45,6 +46,7 @@ function App() {
     <ThemeProvider>
       <ToastProvider>
         <AuthProvider>
+          <NotificationProvider>
           <BrowserRouter>
           <Routes>
             {/* ── Public Auth Routes ──────────────────────────── */}
@@ -68,9 +70,11 @@ function App() {
               <Route path="/clients" element={<Clients />} />
               <Route path="/invoices" element={<Documents defaultType="invoice" initialView="list" />} />
               <Route path="/invoices/create" element={<Documents defaultType="invoice" initialView="create" />} />
+              <Route path="/invoices/:id" element={<Documents defaultType="invoice" initialView="details" />} />
               <Route path="/quotes" element={<Documents defaultType="quote" initialView="list" />} />
               <Route path="/quotes/create" element={<Documents defaultType="quote" initialView="create" />} />
-              <Route path="/vendors" element={<Vendors />} />
+              <Route path="/quotes/:id" element={<Documents defaultType="quote" initialView="details" />} />
+
               <Route path="/team" element={<Team />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/subscription" element={<SubscriptionPage />} />
@@ -86,6 +90,7 @@ function App() {
               }
             >
               <Route path="/master/dashboard" element={<MasterDashboard />} />
+              <Route path="/master/plans" element={<MasterPlans />} />
               <Route path="/master/tenants" element={<MasterTenants />} />
               <Route path="/master/tenants/:id" element={<MasterTenantDetail />} />
               <Route path="/master/billing" element={<MasterBilling />} />
@@ -97,7 +102,8 @@ function App() {
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </BrowserRouter>
-      </AuthProvider>
+          </NotificationProvider>
+        </AuthProvider>
     </ToastProvider>
     </ThemeProvider>
   );

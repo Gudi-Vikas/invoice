@@ -3,6 +3,7 @@ import pool from '../config/db.js';
 import razorpayService from '../services/razorpayService.js';
 import { postLedgerTransaction, postPaymentLedger } from '../services/ledgerService.js';
 import { createPlatformInvoice } from './platformBillingController.js';
+import eventBus from '../services/eventBus.js';
 
 /**
  * Controller processing asynchronous status updates from Razorpay Webhook streams.
@@ -127,6 +128,12 @@ export const webhookController = {
               parseFloat(doc.total_due)
             );
             console.log(`[Webhook Controller] Paid status and double-entry ledger updated for Invoice: ${doc.document_number}`);
+            
+            eventBus.emit('invoice.paid', {
+              tenantId,
+              invoiceNumber: doc.document_number,
+              invoiceId: doc.id
+            });
           });
           break;
         }

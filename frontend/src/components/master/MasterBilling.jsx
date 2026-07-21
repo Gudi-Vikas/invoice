@@ -130,7 +130,7 @@ export const MasterBilling = () => {
       </div>
 
       {/* Invoice Table */}
-      <div className="glass-card" style={{ padding: 0 }}>
+      <div className="billing-card" style={{ padding: 0 }}>
         {loading && invoices.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '3rem' }}>Loading...</p>
         ) : invoices.length === 0 ? (
@@ -208,7 +208,7 @@ export const MasterBilling = () => {
       {/* Generate Modal */}
       {showGenerate && (
         <div className="modal-overlay">
-          <div className="glass-card modal-card" style={{ '--modal-width': '520px' }}>
+          <div className="billing-card modal-card" style={{ '--modal-width': '520px' }}>
             <h3 style={{ marginBottom: '1.25rem' }}><Plus size={16} style={{ verticalAlign: 'middle' }} /> Generate Billing Invoice</h3>
             <form onSubmit={handleGenerate}>
               <div className="form-group">
@@ -262,7 +262,7 @@ export const MasterBilling = () => {
       {/* Detail Modal */}
       {showDetail && (
         <div className="modal-overlay">
-          <div className="glass-card modal-card" style={{ '--modal-width': '520px' }}>
+          <div className="billing-card modal-card" style={{ '--modal-width': '520px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h3>{showDetail.invoice_number}</h3>
               <button onClick={() => setShowDetail(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>

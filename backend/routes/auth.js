@@ -28,4 +28,10 @@ router.post('/invite', authenticateToken, requireTenant, checkRole(['admin']), a
 // Get list of all users in the active tenant workspace
 router.get('/users', authenticateToken, requireTenant, authController.listUsers);
 
+// Update permissions for a user in the active tenant workspace
+router.put('/users/:userId/permissions', authenticateToken, requireTenant, checkRole(['admin']), authController.updateUserPermissions);
+
+// Remove a user from the active tenant workspace
+router.delete('/users/:userId', authenticateToken, requireTenant, checkRole(['admin']), authController.removeUser);
+
 export default router;

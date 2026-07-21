@@ -18,6 +18,14 @@ export const vendorController = {
 
     try {
       const vendorResult = await runInTransaction(req.tenantId, async (client) => {
+        const existing = await client.query(
+          `SELECT id FROM vendors WHERE tenant_id = $1 AND email = $2`,
+          [req.tenantId, email]
+        );
+        if (existing.rows.length > 0) {
+          throw Object.assign(new Error('A vendor with this email already exists.'), { status: 409 });
+        }
+
         // A. Insert vendor locally
         const insertRes = await client.query(
           `INSERT INTO vendors (tenant_id, business_name, email, platform_fee_percentage, kyc_status)

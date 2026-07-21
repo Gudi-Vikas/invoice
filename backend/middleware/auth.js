@@ -32,7 +32,7 @@ export const authenticateToken = async (req, res, next) => {
       // Re-verify against DB — allows disabling a master admin mid-session.
       const adminRes = await runWithoutRLS(async (client) => {
         return client.query(
-          'SELECT id, email, is_active FROM master_admins WHERE id = $1',
+          'SELECT id, email, is_active, permissions FROM master_admins WHERE id = $1',
           [decoded.id]
         );
       });
@@ -43,7 +43,12 @@ export const authenticateToken = async (req, res, next) => {
         });
       }
 
-      req.masterAdmin = { id: adminRes.rows[0].id, email: adminRes.rows[0].email };
+      const adminRow = adminRes.rows[0];
+      req.masterAdmin = {
+        id: adminRow.id,
+        email: adminRow.email,
+        permissions: adminRow.permissions   // NULL = full access, array = restricted
+      };
       // Also set req.user for any middleware that reads it generically.
       req.user = req.masterAdmin;
       return next();
@@ -66,7 +71,7 @@ export const authenticateToken = async (req, res, next) => {
     // context has not been established yet; user_id filter prevents data leakage.
     const memberCheck = await runWithoutRLS(async (client) => {
       return client.query(
-        'SELECT role FROM tenant_users WHERE tenant_id = $1 AND user_id = $2',
+        'SELECT role, permissions FROM tenant_users WHERE tenant_id = $1 AND user_id = $2',
         [tenantId, req.user.id]
       );
     });
@@ -79,6 +84,7 @@ export const authenticateToken = async (req, res, next) => {
 
     req.tenantId = tenantId;
     req.role = memberCheck.rows[0].role; // admin | billing | member
+    req.permissions = memberCheck.rows[0].permissions; // null or array of keys
 
     next();
   } catch (err) {
@@ -126,6 +132,38 @@ export const checkRole = (allowedRoles) => {
 };
 
 /**
+ * Role-Based Access Control (RBAC) enforcer for specific tenant sections.
+ * @param {string} section - The section key (e.g. 'dashboard', 'quotes')
+ */
+export const requireTenantPermission = (section) => {
+  return (req, res, next) => {
+    // Master Admins doing global tenant overrides bypass section checks
+    if (req.masterAdmin) {
+      return next();
+    }
+    
+    // Tenant Admins have full access
+    if (req.role === 'admin') {
+      return next();
+    }
+
+    // NULL permissions means full access (default for existing non-admin roles unless changed)
+    if (req.permissions === null) {
+      return next();
+    }
+
+    // Array of permissions
+    if (Array.isArray(req.permissions) && req.permissions.includes(section)) {
+      return next();
+    }
+
+    return res.status(403).json({
+      error: `Forbidden: You do not have permission to access the '${section}' section.`
+    });
+  };
+};
+
+/**
  * Guards routes that are exclusively for the platform Master Admin.
  * Must be chained AFTER authenticateToken.
  *
@@ -139,4 +177,33 @@ export const requireMasterAdmin = (req, res, next) => {
     });
   }
   next();
+};
+
+/**
+ * RBAC permission guard for individual master admin sections.
+ * Must be chained AFTER authenticateToken + requireMasterAdmin.
+ *
+ * If the admin's permissions field is NULL → full access (legacy/seed admins).
+ * If the admin's permissions is a JSON array → must contain the required section.
+ *
+ * @param {string} section - One of: dashboard, plans, tenants, billing, admins
+ *
+ * Usage:
+ *   router.get('/dashboard', ...guard, requireMasterPermission('dashboard'), handler);
+ */
+export const requireMasterPermission = (section) => {
+  return (req, res, next) => {
+    const perms = req.masterAdmin?.permissions;
+    // NULL = full access (unrestricted)
+    if (perms === null || perms === undefined) {
+      return next();
+    }
+    // Array check — must include the section or wildcard
+    if (Array.isArray(perms) && (perms.includes(section) || perms.includes('*'))) {
+      return next();
+    }
+    return res.status(403).json({
+      error: `Forbidden: You do not have access to the "${section}" section.`
+    });
+  };
 };

@@ -3,7 +3,10 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { CreditCard, Check, Zap, ArrowRight } from 'lucide-react';
+import {
+  CreditCard, Check, X, Zap, ArrowRight, Infinity,
+  Users, FileText, Crown, Clock, TrendingUp
+} from 'lucide-react';
 
 const loadRazorpayScript = () => new Promise((resolve) => {
   if (window.Razorpay) {
@@ -18,8 +21,16 @@ const loadRazorpayScript = () => new Promise((resolve) => {
   document.body.appendChild(script);
 });
 
+const FEATURE_META = {
+  max_clients:            { label: 'Clients',           icon: Users },
+  max_invoices_per_month: { label: 'Invoices / Month',  icon: FileText },
+  max_quotes_per_month:   { label: 'Quotes / Month',    icon: FileText },
+  max_team_members:       { label: 'Team Members',      icon: Users },
+  custom_branding:        { label: 'Custom Branding',   icon: Crown }
+};
+
 /**
- * SubscriptionPage — Starter-only paid activation flow.
+ * SubscriptionPage — Multi-plan pricing page with Razorpay checkout.
  */
 export const SubscriptionPage = () => {
   const { showToast } = useToast();
@@ -32,7 +43,7 @@ export const SubscriptionPage = () => {
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [payingInvoice, setPayingInvoice] = useState(null);
 
-  const [isActive, setIsActive] = useState(false);
+  const [subscription, setSubscription] = useState(null);
   const [loadingSubscription, setLoadingSubscription] = useState(true);
 
   const loadPlans = useCallback(async () => {
@@ -60,7 +71,7 @@ export const SubscriptionPage = () => {
   const loadSubscriptionStatus = useCallback(async () => {
     try {
       const data = await api.getSubscriptionStatus();
-      setIsActive(!!data?.isActive);
+      setSubscription(data?.subscription || null);
     } catch {
       showToast('Failed to load subscription status.', 'error');
     } finally {
@@ -74,6 +85,9 @@ export const SubscriptionPage = () => {
     loadSubscriptionStatus();
   }, [loadPlans, loadInvoices, loadSubscriptionStatus]);
 
+  const isActive = subscription?.status === 'active';
+  const currentPlanId = subscription?.plan_id;
+
   const handleCheckout = async (planId) => {
     setCheckingOut(planId);
     try {
@@ -86,7 +100,7 @@ export const SubscriptionPage = () => {
           razorpay_payment_id: `pay_mock_${details.order.id}`,
           razorpay_signature: 'mock_signature'
         });
-        showToast('Starter subscription activated in mock payment mode.', 'success');
+        showToast('Subscription activated (mock mode).', 'success');
         loadPlans();
         loadSubscriptionStatus();
         return;
@@ -102,7 +116,7 @@ export const SubscriptionPage = () => {
         amount: details.order.amount,
         currency: details.order.currency || 'INR',
         name: 'Ultrakey IT Solutions',
-        description: `${details.planName} subscription`,
+        description: `${details.planName} Subscription`,
         order_id: details.order.id,
         prefill: {
           email: user?.email || details.adminEmail || ''
@@ -113,14 +127,14 @@ export const SubscriptionPage = () => {
         },
         handler: async (response) => {
           await api.verifyCheckout(response);
-          showToast('Starter subscription activated.', 'success');
+          showToast('Subscription activated successfully!', 'success');
           loadPlans();
           loadSubscriptionStatus();
         },
         modal: {
           ondismiss: () => showToast('Payment was cancelled.', 'error')
         },
-        theme: { color: '#3b82f6' }
+        theme: { color: '#7c3aed' }
       });
 
       razorpay.open();
@@ -177,7 +191,7 @@ export const SubscriptionPage = () => {
         modal: {
           ondismiss: () => showToast('Payment was cancelled.', 'error')
         },
-        theme: { color: '#3b82f6' }
+        theme: { color: '#7c3aed' }
       });
 
       razorpay.open();
@@ -199,24 +213,64 @@ export const SubscriptionPage = () => {
 
   return (
     <div className="fade-in">
+      {/* Header */}
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-          <CreditCard size={28} style={{ verticalAlign: 'middle', marginRight: '0.5rem', color: 'var(--accent-primary)' }} />
-          Subscription
+          <CreditCard size={28} style={{ verticalAlign: 'middle', marginRight: '0.5rem', color: 'var(--accent-secondary)' }} />
+          Subscription Plans
         </h1>
         <p style={{ color: 'var(--text-secondary)' }}>
-          Starter is the only active plan right now. Payment is required before using the app.
+          {isActive
+            ? 'You have an active subscription. View your plan details and billing history below.'
+            : 'Choose a plan to activate your workspace and unlock all features.'}
         </p>
       </div>
 
+      {/* Current Plan Status Bar */}
+      {isActive && subscription && (
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: '1.5rem',
+            padding: '1rem 1.5rem', marginBottom: '2rem',
+            background: 'rgba(16, 185, 129, 0.06)',
+            border: '1px solid rgba(16, 185, 129, 0.2)',
+            borderRadius: '12px'
+          }}
+        >
+          <Zap size={20} style={{ color: 'var(--accent-success)', flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <span style={{ fontWeight: 600, color: 'var(--accent-success)' }}>Active — </span>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{subscription.plan_name}</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginLeft: '0.5rem' }}>
+              ₹{parseFloat(subscription.price_monthly || 0).toLocaleString('en-IN')}/mo
+            </span>
+          </div>
+          {subscription.current_period_end && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              <Clock size={14} />
+              Renews {new Date(subscription.current_period_end).toLocaleDateString()}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pricing Grid */}
       {plans.length === 0 ? (
         <div className="glass-card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <p style={{ color: 'var(--text-muted)' }}>Starter plan is not configured yet.</p>
+          <p style={{ color: 'var(--text-muted)' }}>No subscription plans are available yet. Contact your administrator.</p>
         </div>
       ) : (
-        <div style={{ maxWidth: '420px' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${Math.min(plans.length, 3)}, 1fr)`,
+          gap: '1.5rem',
+          maxWidth: plans.length === 1 ? '420px' : plans.length === 2 ? '780px' : '100%',
+          marginBottom: '3rem'
+        }}>
           {plans.map((plan) => {
             const features = plan.features?.filter(f => f.key) || [];
+            const isCurrent = currentPlanId === plan.id && isActive;
+            const isFeatured = plan.is_featured;
 
             return (
               <div
@@ -224,73 +278,142 @@ export const SubscriptionPage = () => {
                 className="glass-card"
                 style={{
                   padding: '2rem',
-                  border: isActive ? '2px solid var(--accent-success)' : '2px solid var(--accent-primary)',
-                  position: 'relative'
+                  position: 'relative',
+                  border: isCurrent
+                    ? '2px solid var(--accent-success)'
+                    : isFeatured
+                      ? '2px solid var(--accent-secondary)'
+                      : '1px solid var(--border-color)',
+                  transform: isFeatured && !isCurrent ? 'scale(1.02)' : 'none',
+                  boxShadow: isFeatured
+                    ? '0 0 30px rgba(139, 92, 246, 0.15)'
+                    : 'var(--box-shadow)',
+                  transition: 'all 0.3s ease'
                 }}
               >
-                {isActive ? (
+                {/* Badge */}
+                {(isCurrent || plan.badge_text || isFeatured) && (
                   <div style={{
                     position: 'absolute', top: '-1px', right: '1.5rem',
-                    background: 'var(--accent-success)', color: '#fff',
+                    background: isCurrent
+                      ? 'var(--accent-success)'
+                      : 'var(--accent-secondary)',
+                    color: '#fff',
                     padding: '0.25rem 0.75rem', borderRadius: '0 0 8px 8px',
-                    fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
+                    fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase',
                     letterSpacing: '0.05em'
                   }}>
-                    <Zap size={10} style={{ verticalAlign: 'middle' }} /> Subscribed
-                  </div>
-                ) : (
-                  <div style={{
-                    position: 'absolute', top: '-1px', right: '1.5rem',
-                    background: 'var(--text-muted)', color: '#fff',
-                    padding: '0.25rem 0.75rem', borderRadius: '0 0 8px 8px',
-                    fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
-                    letterSpacing: '0.05em'
-                  }}>
-                    Available
+                    {isCurrent
+                      ? <><Zap size={10} style={{ verticalAlign: 'middle' }} /> Current Plan</>
+                      : plan.badge_text || '★ Popular'}
                   </div>
                 )}
 
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                {/* Plan Name + Description */}
+                <h3 style={{
+                  fontSize: '1.25rem', fontWeight: 700,
+                  marginBottom: '0.35rem', marginTop: isCurrent || plan.badge_text || isFeatured ? '0.5rem' : 0
+                }}>
                   {plan.name}
                 </h3>
-                <div style={{ marginBottom: '1.5rem' }}>
+                {plan.description && (
+                  <p style={{
+                    color: 'var(--text-muted)', fontSize: '0.82rem',
+                    marginBottom: '1.25rem', lineHeight: '1.4'
+                  }}>
+                    {plan.description}
+                  </p>
+                )}
+
+                {/* Price */}
+                <div style={{ marginBottom: '1.75rem' }}>
                   <span style={{
                     fontSize: '2.5rem', fontWeight: 800, fontFamily: 'var(--font-display)',
-                    color: isActive ? 'var(--accent-success)' : 'var(--accent-primary)'
+                    color: isCurrent
+                      ? 'var(--accent-success)'
+                      : isFeatured
+                        ? 'var(--accent-secondary)'
+                        : 'var(--accent-primary)'
                   }}>
                     ₹{parseFloat(plan.price_monthly || 0).toLocaleString('en-IN')}
                   </span>
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}> / month</span>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1.75rem' }}>
-                  {features.map((f, fi) => (
-                    <div key={fi} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Check size={14} style={{ color: 'var(--accent-success)', flexShrink: 0 }} />
-                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                        {f.key.replace(/_/g, ' ')} - {f.limit === -1 ? 'Unlimited' : f.limit}
-                      </span>
+                  {plan.price_annually && (
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '0.25rem' }}>
+                      or ₹{parseFloat(plan.price_annually).toLocaleString('en-IN')} / year
+                      {plan.price_monthly && plan.price_annually && (
+                        <span style={{ color: 'var(--accent-success)', marginLeft: '0.35rem', fontWeight: 600 }}>
+                          Save {Math.round((1 - parseFloat(plan.price_annually) / (parseFloat(plan.price_monthly) * 12)) * 100)}%
+                        </span>
+                      )}
                     </div>
-                  ))}
+                  )}
                 </div>
 
+                {/* Features List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '2rem' }}>
+                  {features.map((f, fi) => {
+                    const meta = FEATURE_META[f.key] || { label: f.key.replace(/_/g, ' '), icon: Check };
+                    const Icon = meta.icon;
+                    const isEnabled = f.key === 'custom_branding' ? f.limit >= 1 : true;
+
+                    return (
+                      <div key={fi} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        {isEnabled ? (
+                          <Check size={14} style={{ color: 'var(--accent-success)', flexShrink: 0 }} />
+                        ) : (
+                          <X size={14} style={{ color: 'var(--text-muted)', flexShrink: 0, opacity: 0.5 }} />
+                        )}
+                        <Icon size={13} style={{ color: 'var(--text-muted)', flexShrink: 0, opacity: 0.6 }} />
+                        <span style={{
+                          fontSize: '0.85rem',
+                          color: isEnabled ? 'var(--text-secondary)' : 'var(--text-muted)',
+                          opacity: isEnabled ? 1 : 0.6
+                        }}>
+                          {f.key === 'custom_branding'
+                            ? 'Custom Branding'
+                            : f.limit === -1
+                              ? <><strong>Unlimited</strong> {meta.label}</>
+                              : <><strong>{f.limit}</strong> {meta.label}</>
+                          }
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* CTA Button */}
                 <button
                   className="btn btn-primary"
                   style={{
                     width: '100%',
-                    backgroundColor: isActive ? 'var(--accent-success)' : undefined,
-                    borderColor: isActive ? 'var(--accent-success)' : undefined,
-                    color: isActive ? '#fff' : undefined,
-                    cursor: isActive ? 'default' : undefined
+                    padding: '0.85rem',
+                    fontSize: '0.95rem',
+                    backgroundColor: isCurrent
+                      ? 'var(--accent-success)'
+                      : isFeatured
+                        ? 'var(--accent-secondary)'
+                        : undefined,
+                    borderColor: isCurrent
+                      ? 'var(--accent-success)'
+                      : isFeatured
+                        ? 'var(--accent-secondary)'
+                        : undefined,
+                    boxShadow: isFeatured && !isCurrent
+                      ? '0 0 20px rgba(139, 92, 246, 0.3)'
+                      : undefined,
+                    cursor: isCurrent ? 'default' : undefined
                   }}
                   onClick={() => handleCheckout(plan.id)}
-                  disabled={checkingOut === plan.id || isActive}
+                  disabled={checkingOut === plan.id || isCurrent}
                 >
                   {checkingOut === plan.id
                     ? 'Processing...'
-                    : isActive
-                      ? 'Subscribed & Active'
-                      : <><ArrowRight size={15} /> Pay & Activate Starter</>
+                    : isCurrent
+                      ? <><Zap size={15} /> Active & Subscribed</>
+                      : isActive
+                        ? <><TrendingUp size={15} /> Switch Plan</>
+                        : <><ArrowRight size={15} /> Subscribe Now</>
                   }
                 </button>
               </div>
@@ -299,9 +422,9 @@ export const SubscriptionPage = () => {
         </div>
       )}
 
-      {/* Platform Invoices History */}
-      <div style={{ marginTop: '3rem' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1rem' }}>SaaS Billing History</h2>
+      {/* Billing History */}
+      <div style={{ marginTop: '1rem' }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1rem' }}>Billing History</h2>
         
         {loadingInvoices ? (
           <p style={{ color: 'var(--text-secondary)' }}>Loading billing invoices...</p>
@@ -316,6 +439,7 @@ export const SubscriptionPage = () => {
                 <thead>
                   <tr>
                     <th>Invoice Number</th>
+                    <th>Plan</th>
                     <th>Billing Period</th>
                     <th>Due Date</th>
                     <th style={{ textAlign: 'right' }}>Tax (18%)</th>
@@ -345,6 +469,7 @@ export const SubscriptionPage = () => {
                     return (
                       <tr key={inv.id}>
                         <td style={{ fontWeight: 600, color: 'var(--accent-primary)' }}>{inv.invoice_number}</td>
+                        <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{inv.plan_name || '—'}</td>
                         <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                           {new Date(inv.billing_period_start).toLocaleDateString()} - {new Date(inv.billing_period_end).toLocaleDateString()}
                         </td>
