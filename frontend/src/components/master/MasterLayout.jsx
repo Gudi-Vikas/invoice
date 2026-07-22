@@ -101,7 +101,7 @@ export const MasterLayout = () => {
           <div className="sidebar-brand-text" style={{ minWidth: 0, overflow: 'hidden' }}>
             <h2 style={{
               fontSize: '1.15rem', fontWeight: 800, fontFamily: 'var(--font-display)',
-              background: 'linear-gradient(to right, hsl(262, 83%, 75%), hsl(350, 89%, 75%))',
+              background: 'linear-gradient(to right, var(--text-primary), var(--text-secondary))',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
               whiteSpace: 'nowrap'
             }}>
@@ -166,7 +166,7 @@ export const MasterLayout = () => {
           <div className="sidebar-user-info" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '0.5rem' }}>
             <div style={{ overflow: 'hidden' }}>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Master Admin:</p>
-              <p style={{ color: 'hsl(262, 83%, 75%)', fontWeight: 500, marginTop: '0.15rem', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <p style={{ color: 'var(--text-secondary)', fontWeight: 500, marginTop: '0.15rem', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {user?.email || 'admin'}
               </p>
             </div>

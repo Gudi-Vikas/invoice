@@ -2,6 +2,7 @@ import { runInTransaction } from '../config/db.js';
 import pool from '../config/db.js';
 import razorpayService from '../services/razorpayService.js';
 import { createPlatformInvoice } from './platformBillingController.js';
+import eventBus from '../services/eventBus.js';
 
 /**
  * Controller managing platform subscription plans and subscription order checks.
@@ -23,7 +24,19 @@ export const subscriptionController = {
           [req.tenantId]
         );
 
-        // Also fetch plan features for the active plan
+        if (subRes.rows[0]) {
+          const sub = subRes.rows[0];
+          // Auto-expire active subscriptions whose period end has passed
+          if (sub.status === 'active' && sub.current_period_end && new Date(sub.current_period_end) < new Date()) {
+            await client.query(
+              `UPDATE subscriptions SET status = 'expired' WHERE id = $1`,
+              [sub.id]
+            );
+            sub.status = 'expired';
+          }
+        }
+
+        // Also fetch plan features for the plan
         let features = [];
         if (subRes.rows[0]) {
           const featRes = await client.query(
@@ -39,9 +52,13 @@ export const subscriptionController = {
           : null;
       });
 
+      const isSubActive = result?.status === 'active' && result?.current_period_end
+        ? new Date(result.current_period_end) >= new Date()
+        : result?.status === 'active';
+
       return res.json({
         subscription: result,
-        isActive: result?.status === 'active'
+        isActive: isSubActive
       });
     } catch (err) {
       next(err);
@@ -104,9 +121,9 @@ export const subscriptionController = {
 
         const plan = planRes.rows[0];
 
-        // Check if there is already an active subscription
+        // Check if there is already an active non-expired subscription
         const activeSubCheck = await client.query(
-          "SELECT id FROM subscriptions WHERE tenant_id = $1 AND status = 'active'",
+          "SELECT id FROM subscriptions WHERE tenant_id = $1 AND status = 'active' AND current_period_end >= NOW()",
           [req.tenantId]
         );
         if (activeSubCheck.rows.length > 0) {
@@ -236,6 +253,11 @@ export const subscriptionController = {
         });
 
         return activatedSub;
+      });
+
+      eventBus.emit('subscription.created', {
+        tenantId: req.tenantId,
+        planId: result.plan_id
       });
 
       return res.json({
@@ -373,6 +395,13 @@ export const subscriptionController = {
         }
 
         return updated.rows[0];
+      });
+
+      eventBus.emit('platform_billing.paid', {
+        invoiceId: result.id,
+        invoiceNumber: result.invoice_number,
+        tenantId: req.tenantId,
+        amount: result.total_amount
       });
 
       return res.json({

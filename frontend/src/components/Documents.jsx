@@ -7,9 +7,10 @@ import { useToast } from '../context/ToastContext';
 import {
   FileText, Plus, Trash2, ArrowLeft, FilePlus, Copy, Check, X,
   UserPlus, Printer, ChevronLeft, ChevronRight, Tag,
-  Mail, Loader, ShieldCheck
+  Mail, Loader, ShieldCheck, Download
 } from 'lucide-react';
 import DocumentListTable from './DocumentListTable';
+import { downloadElementAsPdf } from '../utils/pdfUtils';
 
 /**
  * Documents Module (Quotes & Invoices Manager).
@@ -55,6 +56,21 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
   const [verifyingDoc, setVerifyingDoc] = useState(null);
   const [sendingEmailId, setSendingEmailId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    if (!docDetails) return;
+    setIsDownloadingPdf(true);
+    try {
+      const fileName = `${docDetails.type}_${docDetails.document_number || 'download'}.pdf`;
+      await downloadElementAsPdf('print-area', fileName);
+      showToast('PDF downloaded successfully!', 'success');
+    } catch (err) {
+      showToast('Failed to download PDF: ' + err.message, 'error');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   const loadMetadata = useCallback(async () => {
     try {
@@ -78,9 +94,12 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
     // No-op or trigger a refresh if we had a ref
   }, []);
 
+  const [clientModalError, setClientModalError] = useState('');
+
   const handleCreateClient = async (e) => {
     e.preventDefault();
     if (!newClientName || !newClientEmail) return;
+    setClientModalError('');
     try {
       const res = await api.createClient({ 
         name: newClientName, 
@@ -95,7 +114,7 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
       setNewClientExtraInfo('');
       setShowClientModal(false);
     } catch (err) {
-      showToast('Failed to register client: ' + err.message, 'error');
+      setClientModalError(err.message || 'Failed to register client.');
     }
   };
 
@@ -497,10 +516,22 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
               )}
               <button
                 className="btn btn-primary"
+                onClick={handleDownloadPdf}
+                disabled={isDownloadingPdf}
+                style={{ gap: '0.5rem' }}
+              >
+                {isDownloadingPdf ? (
+                  <><Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> Generating PDF...</>
+                ) : (
+                  <><Download size={15} /> Download PDF</>
+                )}
+              </button>
+              <button
+                className="btn btn-secondary"
                 onClick={() => window.print()}
                 style={{ gap: '0.5rem' }}
               >
-                <Printer size={15} /> Print / Download PDF
+                <Printer size={15} /> Print
               </button>
             </div>
           </div>
@@ -591,23 +622,19 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
                   <div className="invoice-address-header">To:</div>
                   <div className="invoice-address-body">
                     <p><b>{docDetails.client_name}</b></p>
-                    {docDetails.billing_address?.street ? (
+                    {(docDetails.billing_address?.street || docDetails.billing_address?.city) && (
                       <>
-                        <p>{docDetails.billing_address.street}</p>
-                        <p>{docDetails.billing_address.city}, {docDetails.billing_address.state} {docDetails.billing_address.zip}</p>
-                      </>
-                    ) : (
-                      <>
-                        <p>Flat No. 204, 2nd Floor, Cyber Residency,</p>
-                        <p>Inidra Nagar, Gachibowli,</p>
-                        <p>Hyderabad, Telangana, India-500032</p>
+                        {docDetails.billing_address.street && <p>{docDetails.billing_address.street}</p>}
+                        {(docDetails.billing_address.city || docDetails.billing_address.state || docDetails.billing_address.zip) && (
+                          <p>
+                            {[docDetails.billing_address.city, docDetails.billing_address.state].filter(Boolean).join(', ')} {docDetails.billing_address.zip || ''}
+                          </p>
+                        )}
                       </>
                     )}
-                    <p>{docDetails.client_email}</p>
-                    {docDetails.client_extra_info ? (
+                    {docDetails.client_email && <p>{docDetails.client_email}</p>}
+                    {docDetails.client_extra_info && (
                       <div dangerouslySetInnerHTML={{ __html: docDetails.client_extra_info }} />
-                    ) : (
-                      <p><b>GST No:</b> 36AADCU5062A1ZO</p>
                     )}
                   </div>
                 </div>
@@ -841,6 +868,15 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
           <div className="glass-card modal-card" style={{ width: '480px' }}>
             <h3 style={{ fontSize: '1.25rem', marginBottom: '1.25rem' }}>Register New Client</h3>
             <form onSubmit={handleCreateClient}>
+              {clientModalError && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px', padding: '0.75rem 1rem', color: 'hsl(350, 89%, 75%)',
+                  fontSize: '0.85rem', marginBottom: '1.25rem'
+                }}>
+                  {clientModalError}
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Client Name *</label>

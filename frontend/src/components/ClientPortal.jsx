@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../api';
-import { CheckCircle2, ShieldCheck, CreditCard, FileCheck, Loader, Printer } from 'lucide-react';
+import { CheckCircle2, ShieldCheck, CreditCard, FileCheck, Loader, Printer, Download } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import { downloadElementAsPdf } from '../utils/pdfUtils';
 
 const loadRazorpayScript = () => {
   return new Promise((resolve) => {
@@ -41,6 +42,21 @@ export const ClientPortal = () => {
   const [offlineReference, setOfflineReference] = useState('');
   const [offlineNotes, setOfflineNotes] = useState('');
   const [submittingOffline, setSubmittingOffline] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    if (!doc) return;
+    setIsDownloadingPdf(true);
+    try {
+      const fileName = `${doc.type}_${doc.document_number || 'download'}.pdf`;
+      await downloadElementAsPdf('print-area', fileName);
+      showToast?.('PDF downloaded successfully!', 'success');
+    } catch (err) {
+      showToast?.('Failed to download PDF: ' + err.message, 'error');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   const loadDocument = useCallback(async () => {
     try {
@@ -314,23 +330,19 @@ export const ClientPortal = () => {
                     <div className="invoice-address-header">To:</div>
                     <div className="invoice-address-body">
                       <p><b>{doc.client_name}</b></p>
-                      {doc.billing_address?.street ? (
+                      {(doc.billing_address?.street || doc.billing_address?.city) && (
                         <>
-                          <p>{doc.billing_address.street}</p>
-                          <p>{doc.billing_address.city}, {doc.billing_address.state} {doc.billing_address.zip}</p>
-                        </>
-                      ) : (
-                        <>
-                          <p>Flat No. 204, 2nd Floor, Cyber Residency,</p>
-                          <p>Inidra Nagar, Gachibowli,</p>
-                          <p>Hyderabad, Telangana, India-500032</p>
+                          {doc.billing_address.street && <p>{doc.billing_address.street}</p>}
+                          {(doc.billing_address.city || doc.billing_address.state || doc.billing_address.zip) && (
+                            <p>
+                              {[doc.billing_address.city, doc.billing_address.state].filter(Boolean).join(', ')} {doc.billing_address.zip || ''}
+                            </p>
+                          )}
                         </>
                       )}
-                      <p>{doc.client_email}</p>
-                      {doc.client_extra_info ? (
+                      {doc.client_email && <p>{doc.client_email}</p>}
+                      {doc.client_extra_info && (
                         <div dangerouslySetInnerHTML={{ __html: doc.client_extra_info }} />
-                      ) : (
-                        <p><b>GST No:</b> 36AADCU5062A1ZO</p>
                       )}
                     </div>
                   </div>
@@ -660,8 +672,20 @@ export const ClientPortal = () => {
                 </div>
               )}
 
+              <button
+                className="btn btn-primary"
+                onClick={handleDownloadPdf}
+                disabled={isDownloadingPdf}
+                style={{ width: '100%', gap: '0.5rem' }}
+              >
+                {isDownloadingPdf ? (
+                  <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Generating PDF...</>
+                ) : (
+                  <><Download size={16} /> Download PDF</>
+                )}
+              </button>
               <button className="btn btn-secondary" onClick={() => window.print()} style={{ width: '100%', gap: '0.5rem' }}>
-                <Printer size={16} /> Print / Download PDF
+                <Printer size={16} /> Print
               </button>
             </div>
           </div>

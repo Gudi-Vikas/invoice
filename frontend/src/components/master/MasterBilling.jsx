@@ -23,7 +23,7 @@ export const MasterBilling = () => {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   
   const [statusFilter, setStatusFilter] = useState('');
-  const [nextCursor, setNextCursor] = useState(null);
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [generating, setGenerating] = useState(false);
   const [actionInProgress, setActionInProgress] = useState(null);
 
@@ -49,26 +49,25 @@ export const MasterBilling = () => {
     }
   }, [showToast]);
 
-  const loadInvoices = useCallback(async (cursor) => {
+  const loadInvoices = useCallback(async () => {
     setLoading(true);
     try {
-      const params = { limit: 20 };
+      const params = { page: pagination.page, limit: 20 };
       if (statusFilter) params.status = statusFilter;
-      if (cursor) params.cursor = cursor;
 
       const data = await api.masterListBilling(params);
-      if (cursor) {
-        setInvoices(prev => [...prev, ...(data.invoices || [])]);
-      } else {
-        setInvoices(data.invoices || []);
-      }
-      setNextCursor(data.pagination?.nextCursor || null);
+      setInvoices(data.invoices || []);
+      setPagination(prev => ({
+        ...prev,
+        totalPages: data.pagination?.totalPages || 1,
+        total: data.pagination?.total || 0
+      }));
     } catch {
       showToast('Failed to load billing invoices.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, showToast]);
+  }, [pagination.page, statusFilter, showToast]);
 
   useEffect(() => { loadInvoices(); }, [loadInvoices]);
   useEffect(() => { loadTenants(); }, [loadTenants]);
@@ -163,7 +162,7 @@ export const MasterBilling = () => {
 
           <div style={{ marginBottom: '1.25rem' }}>
             <select className="form-select" value={statusFilter}
-              onChange={e => { setStatusFilter(e.target.value); setNextCursor(null); }}
+              onChange={e => { setStatusFilter(e.target.value); setPagination(prev => ({ ...prev, page: 1 })); }}
               style={{ width: '200px' }}>
               <option value="">All Statuses</option>
               <option value="pending">Pending</option>
@@ -241,10 +240,21 @@ export const MasterBilling = () => {
             )}
           </div>
 
-          {nextCursor && (
-            <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
-              <button className="btn btn-secondary" onClick={() => loadInvoices(nextCursor)}>
-                Load More
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1.5rem' }}>
+              <button className="btn btn-secondary" disabled={pagination.page <= 1}
+                onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+                style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
+                Previous
+              </button>
+              <span style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0 1rem' }}>
+                Page {pagination.page} of {pagination.totalPages}
+              </span>
+              <button className="btn btn-secondary" disabled={pagination.page >= pagination.totalPages}
+                onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                style={{ padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
+                Next
               </button>
             </div>
           )}

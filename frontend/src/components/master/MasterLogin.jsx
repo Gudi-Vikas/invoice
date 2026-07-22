@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Layers, LogIn, ShieldCheck } from 'lucide-react';
+import ThemeToggle from '../ThemeToggle';
 
 /**
  * MasterLogin — Separate login page for platform master admins.
@@ -39,6 +40,11 @@ export const MasterLogin = () => {
       <div className="auth-bg-orb auth-bg-orb-1" style={{ background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)' }} />
       <div className="auth-bg-orb auth-bg-orb-2" style={{ background: 'radial-gradient(circle, rgba(239, 68, 68, 0.1) 0%, transparent 70%)' }} />
 
+      {/* Theme Toggle Top Right */}
+      <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', zIndex: 10 }}>
+        <ThemeToggle />
+      </div>
+
       <div className="auth-card glass-card fade-in">
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
           <div style={{
@@ -65,7 +71,7 @@ export const MasterLogin = () => {
             background: 'rgba(239, 68, 68, 0.1)',
             border: '1px solid rgba(239, 68, 68, 0.3)',
             borderRadius: '10px', padding: '0.75rem 1rem',
-            color: 'hsl(350, 89%, 75%)', fontSize: '0.85rem',
+            color: 'var(--accent-danger)', fontSize: '0.85rem',
             marginBottom: '1.25rem', animation: 'shake 0.4s ease'
           }}>
             {error}

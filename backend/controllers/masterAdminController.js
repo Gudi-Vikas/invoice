@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { runWithoutRLS } from '../config/db.js';
 import razorpayService from '../services/razorpayService.js';
+import eventBus from '../services/eventBus.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -187,8 +188,9 @@ export const masterAdminController = {
         let idx = 1;
 
         if (status) {
-          conditions.push(`t.status = $${idx++}`);
+          conditions.push(`(t.status = $${idx} OR s.status = $${idx})`);
           params.push(status);
+          idx++;
         }
         if (search) {
           conditions.push(`(t.name ILIKE $${idx} OR t.domain ILIKE $${idx})`);
@@ -342,6 +344,12 @@ export const masterAdminController = {
         });
       }
 
+      eventBus.emit('tenant.suspended', {
+        tenantId: updated.rows[0].id,
+        name: updated.rows[0].name,
+        reason: reason || null
+      });
+
       return res.json({
         message: `Tenant "${updated.rows[0].name}" has been suspended.`,
         tenant: updated.rows[0],
@@ -374,6 +382,11 @@ export const masterAdminController = {
           error: 'Tenant not found, or it is not currently suspended.'
         });
       }
+
+      eventBus.emit('tenant.enabled', {
+        tenantId: updated.rows[0].id,
+        name: updated.rows[0].name
+      });
 
       return res.json({
         message: `Tenant "${updated.rows[0].name}" has been re-activated.`,
@@ -481,6 +494,12 @@ export const masterAdminController = {
         }
 
         return updated.rows[0];
+      });
+
+      eventBus.emit('subscription.overridden', {
+        tenantId: id,
+        planId,
+        status
       });
 
       return res.json({
@@ -600,6 +619,10 @@ export const masterAdminController = {
         );
 
         return insertRes.rows[0];
+      });
+
+      eventBus.emit('master_admin.created', {
+        email: result.email
       });
 
       return res.status(201).json({
@@ -828,6 +851,11 @@ export const masterAdminController = {
         `, [plan.id]);
 
         return fullPlan.rows[0];
+      });
+
+      eventBus.emit('plan.created', {
+        planId: result.id,
+        name: result.name
       });
 
       return res.status(201).json({

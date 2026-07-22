@@ -45,7 +45,7 @@ const PermissionCheckboxes = ({ selected, onToggle, fullAccess, onFullAccessTogg
       <div>
         <span style={{
           fontWeight: 700, fontSize: '0.9rem',
-          color: fullAccess ? 'hsl(262, 83%, 75%)' : 'var(--text-primary)'
+          color: fullAccess ? 'var(--accent-secondary)' : 'var(--text-primary)'
         }}>
           Full Access
         </span>
@@ -141,12 +141,14 @@ export const MasterAdmins = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
 
   // ── Edit Permissions Modal State ──────────────────────────────────────────
   const [editingAdmin, setEditingAdmin] = useState(null);
   const [editPerms, setEditPerms] = useState([]);
   const [editFullAccess, setEditFullAccess] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editPermsError, setEditPermsError] = useState('');
 
   const loadAdmins = useCallback(async () => {
     try {
@@ -176,6 +178,7 @@ export const MasterAdmins = () => {
   const handleCreate = async (e) => {
     e.preventDefault();
     setCreating(true);
+    setCreateError('');
     try {
       const payload = {
         email: createForm.email,
@@ -188,7 +191,7 @@ export const MasterAdmins = () => {
       setCreateForm({ email: '', password: '', fullAccess: true, permissions: [] });
       loadAdmins();
     } catch (err) {
-      showToast(err.message, 'error');
+      setCreateError(err.message || 'Failed to create admin.');
     } finally {
       setCreating(false);
     }
@@ -209,6 +212,7 @@ export const MasterAdmins = () => {
   // ── Edit Permissions ──────────────────────────────────────────────────────
   const openEditPerms = (admin) => {
     setEditingAdmin(admin);
+    setEditPermsError('');
     const isFullAccess = admin.permissions === null || admin.permissions === undefined;
     setEditFullAccess(isFullAccess);
     setEditPerms(isFullAccess ? [] : (admin.permissions || []));
@@ -223,6 +227,7 @@ export const MasterAdmins = () => {
   const handleSavePerms = async () => {
     if (!editingAdmin) return;
     setSaving(true);
+    setEditPermsError('');
     try {
       const perms = editFullAccess ? null : editPerms;
       const data = await api.masterUpdateAdminPermissions(editingAdmin.id, perms);
@@ -230,7 +235,7 @@ export const MasterAdmins = () => {
       setEditingAdmin(null);
       loadAdmins();
     } catch (err) {
-      showToast(err.message, 'error');
+      setEditPermsError(err.message || 'Failed to update permissions.');
     } finally {
       setSaving(false);
     }
@@ -245,7 +250,7 @@ export const MasterAdmins = () => {
           padding: '0.25rem 0.7rem', borderRadius: '20px', fontSize: '0.72rem',
           fontWeight: 600, letterSpacing: '0.03em',
           background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.2))',
-          color: 'hsl(262, 83%, 75%)', border: '1px solid rgba(139, 92, 246, 0.3)'
+          color: 'var(--accent-secondary)', border: '1px solid rgba(139, 92, 246, 0.3)'
         }}>
           <ShieldCheck size={12} /> Full Access
         </span>
@@ -439,6 +444,15 @@ export const MasterAdmins = () => {
           </div>
 
           <form onSubmit={handleCreate}>
+            {createError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px', padding: '0.75rem 1rem', color: 'hsl(350, 89%, 75%)',
+                fontSize: '0.85rem', marginBottom: '1.25rem'
+              }}>
+                {createError}
+              </div>
+            )}
             <div className="form-group">
               <label className="form-label">Email Address</label>
               <input
@@ -548,6 +562,16 @@ export const MasterAdmins = () => {
               <X size={20} />
             </button>
           </div>
+
+          {editPermsError && (
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '8px', padding: '0.75rem 1rem', color: 'hsl(350, 89%, 75%)',
+              fontSize: '0.85rem', marginBottom: '1.25rem'
+            }}>
+              {editPermsError}
+            </div>
+          )}
 
           <PermissionCheckboxes
             selected={editPerms}

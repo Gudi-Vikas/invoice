@@ -29,7 +29,43 @@ export const initNotificationService = (io) => {
 
   // Master events
   eventBus.on('tenant.created', async (data) => {
-    await handleEvent('tenant_created', 'New Tenant', `A new tenant registered: ${data.name}`, null, null, `/master/tenants/${data.tenantId}`);
+    await handleEvent('tenant_created', 'New Tenant Registered', `A new tenant registered: ${data.name}`, null, null, `/master/tenants/${data.tenantId}`);
+  });
+
+  eventBus.on('tenant.suspended', async (data) => {
+    await handleEvent('tenant_suspended', 'Tenant Suspended', `Tenant "${data.name}" was suspended.${data.reason ? ` Reason: ${data.reason}` : ''}`, null, null, `/master/tenants/${data.tenantId}`);
+  });
+
+  eventBus.on('tenant.enabled', async (data) => {
+    await handleEvent('tenant_enabled', 'Tenant Re-activated', `Tenant "${data.name}" was re-activated.`, null, null, `/master/tenants/${data.tenantId}`);
+  });
+
+  eventBus.on('platform_billing.created', async (data) => {
+    await handleEvent('platform_billing_created', 'Platform Invoice Generated', `Invoice ${data.invoiceNumber} (₹${parseFloat(data.amount).toFixed(2)}) generated for tenant.`, null, null, '/master/billing');
+  });
+
+  eventBus.on('platform_billing.paid', async (data) => {
+    await handleEvent('platform_billing_paid', 'Platform Invoice Paid', `Platform invoice ${data.invoiceNumber} (₹${parseFloat(data.amount).toFixed(2)}) has been marked as paid.`, null, null, '/master/billing');
+  });
+
+  eventBus.on('platform_billing.voided', async (data) => {
+    await handleEvent('platform_billing_voided', 'Platform Invoice Voided', `Platform invoice ${data.invoiceNumber} was voided.`, null, null, '/master/billing');
+  });
+
+  eventBus.on('subscription.created', async (data) => {
+    await handleEvent('subscription_created', 'Subscription Purchased', `Tenant "${data.tenantName || 'A tenant'}" subscribed to ${data.planName || 'a plan'}.`, null, null, data.tenantId ? `/master/tenants/${data.tenantId}` : '/master/tenants');
+  });
+
+  eventBus.on('subscription.overridden', async (data) => {
+    await handleEvent('subscription_overridden', 'Subscription Overridden', `Subscription was manually overridden for tenant.`, null, null, `/master/tenants/${data.tenantId}`);
+  });
+
+  eventBus.on('master_admin.created', async (data) => {
+    await handleEvent('master_admin_created', 'Co-Admin Created', `New master admin account created: ${data.email}`, null, null, '/master/admins');
+  });
+
+  eventBus.on('plan.created', async (data) => {
+    await handleEvent('plan_created', 'SaaS Plan Created', `New subscription plan "${data.name}" created.`, null, null, '/master/plans');
   });
 };
 

@@ -40,6 +40,7 @@ export const MasterPlans = () => {
   const [editing, setEditing] = useState(null); // null = create, object = edit
   const [form, setForm] = useState({ ...emptyPlan });
   const [saving, setSaving] = useState(false);
+  const [modalError, setModalError] = useState('');
   const [archivingId, setArchivingId] = useState(null);
 
   const loadPlans = useCallback(async () => {
@@ -58,11 +59,13 @@ export const MasterPlans = () => {
   const openCreate = () => {
     setEditing(null);
     setForm({ ...emptyPlan, features: FEATURE_KEYS.map(fk => ({ key: fk.key, limit: 0, unlimited: false })) });
+    setModalError('');
     setShowModal(true);
   };
 
   const openEdit = (plan) => {
     setEditing(plan);
+    setModalError('');
     const features = FEATURE_KEYS.map(fk => {
       const existing = plan.features?.find(f => f.key === fk.key);
       if (existing) {
@@ -89,8 +92,9 @@ export const MasterPlans = () => {
   };
 
   const handleSave = async () => {
+    setModalError('');
     if (!form.name.trim() || !form.priceMonthly) {
-      showToast('Plan name and monthly price are required.', 'error');
+      setModalError('Plan name and monthly price are required.');
       return;
     }
 
@@ -121,7 +125,7 @@ export const MasterPlans = () => {
       setShowModal(false);
       loadPlans();
     } catch (err) {
-      showToast(err.message, 'error');
+      setModalError(err.message || 'Failed to save plan.');
     } finally {
       setSaving(false);
     }
@@ -364,6 +368,16 @@ export const MasterPlans = () => {
               </button>
             </div>
 
+            {modalError && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px', padding: '0.75rem 1rem', color: 'hsl(350, 89%, 75%)',
+                fontSize: '0.85rem', marginBottom: '1.25rem'
+              }}>
+                {modalError}
+              </div>
+            )}
+
             {/* Basic Info */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
               <div className="form-group" style={{ gridColumn: '1 / -1', marginBottom: 0 }}>
@@ -431,7 +445,7 @@ export const MasterPlans = () => {
                       key={feat.key}
                       style={{
                         display: 'flex', alignItems: 'center', gap: '1rem',
-                        padding: '0.75rem 1rem', background: 'rgba(255,255,255,0.02)',
+                        padding: '0.75rem 1rem', background: 'var(--bg-active)',
                         border: '1px solid var(--border-color)', borderRadius: '10px'
                       }}
                     >

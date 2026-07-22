@@ -66,11 +66,17 @@ export const Vendors = () => {
     }
   }, [loadVendors, showToast]);
 
+  // Form error states
+  const [addVendorError, setAddVendorError] = useState('');
+  const [kycError, setKycError] = useState('');
+  const [payoutError, setPayoutError] = useState('');
+
   const handleAddVendor = async (e) => {
     e.preventDefault();
     if (!bizName || !email || creatingVendor) return;
 
     setCreatingVendor(true);
+    setAddVendorError('');
     try {
       await api.createVendor({
         businessName: bizName,
@@ -84,7 +90,7 @@ export const Vendors = () => {
       showToast('Vendor registered successfully.', 'success');
       loadVendors();
     } catch (err) {
-      showToast('Failed to register vendor: ' + err.message, 'error');
+      setAddVendorError(err.message || 'Failed to register vendor.');
     } finally {
       setCreatingVendor(false);
     }
@@ -95,6 +101,7 @@ export const Vendors = () => {
     if (!kycVendorId || !holderName || !bankAccount || submittingKyc) return;
 
     setSubmittingKyc(true);
+    setKycError('');
     try {
       await api.submitKyc(kycVendorId, {
         stakeholder: {
@@ -119,7 +126,7 @@ export const Vendors = () => {
       showToast('KYC submitted successfully.', 'success');
       loadVendors();
     } catch (err) {
-      showToast('Failed to submit KYC data: ' + err.message, 'error');
+      setKycError(err.message || 'Failed to submit KYC data.');
     } finally {
       setSubmittingKyc(false);
     }
@@ -175,11 +182,12 @@ export const Vendors = () => {
 
     const amt = parseFloat(payoutAmount);
     if (isNaN(amt) || amt <= 0 || amt > balance) {
-      showToast('Invalid payout amount.', 'error');
+      setPayoutError('Invalid payout amount.');
       return;
     }
 
     setProcessingPayout(true);
+    setPayoutError('');
     try {
       await api.payoutVendor(selectedVendor.id, amt);
       showToast(`Payout of ₹${amt.toFixed(2)} processed successfully.`, 'success');
@@ -195,7 +203,7 @@ export const Vendors = () => {
       setBalance(balanceData?.balance || 0);
       loadVendors();
     } catch (err) {
-      showToast('Failed to process payout: ' + err.message, 'error');
+      setPayoutError(err.message || 'Failed to process payout.');
     } finally {
       setProcessingPayout(false);
     }
@@ -237,7 +245,7 @@ export const Vendors = () => {
             <div key={v.id} className="glass-card vendor-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                  <h3 style={{ fontSize: '1.15rem', color: '#fff', fontWeight: 700 }}>{v.business_name}</h3>
+                  <h3 style={{ fontSize: '1.15rem', color: 'var(--text-primary)', fontWeight: 700 }}>{v.business_name}</h3>
                   <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent-primary)', background: 'rgba(59, 130, 246, 0.08)', padding: '0.2rem 0.6rem', borderRadius: '6px' }}>
                     Fee: {v.platform_fee_percentage}%
                   </span>
@@ -294,6 +302,15 @@ export const Vendors = () => {
             <h3 style={{ fontSize: '1.25rem', marginBottom: '1.25rem' }}>Onboard New Marketplace Seller</h3>
             
             <form onSubmit={handleAddVendor}>
+              {addVendorError && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px', padding: '0.75rem 1rem', color: 'hsl(350, 89%, 75%)',
+                  fontSize: '0.85rem', marginBottom: '1.25rem'
+                }}>
+                  {addVendorError}
+                </div>
+              )}
               <div className="form-group">
                 <label className="form-label">Vendor Business Name</label>
                 <input 
@@ -349,6 +366,15 @@ export const Vendors = () => {
             </p>
 
             <form onSubmit={handleKycSubmit}>
+              {kycError && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px', padding: '0.75rem 1rem', color: 'hsl(350, 89%, 75%)',
+                  fontSize: '0.85rem', marginBottom: '1.25rem'
+                }}>
+                  {kycError}
+                </div>
+              )}
               <h4 style={{ fontSize: '0.9rem', color: 'var(--accent-primary)', marginBottom: '0.75rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem' }}>
                 Authorized Stakeholder
               </h4>
@@ -438,7 +464,7 @@ export const Vendors = () => {
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff' }}>{selectedVendor.business_name}</h3>
+                <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>{selectedVendor.business_name}</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{selectedVendor.email} · platform commission: {selectedVendor.platform_fee_percentage}%</p>
               </div>
               <button 
@@ -463,7 +489,7 @@ export const Vendors = () => {
                      <div>
                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Outstanding Payable</span>
                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-                         <strong style={{ fontSize: '1.4rem', color: '#fff', fontWeight: 800 }}>₹{balance.toFixed(2)}</strong>
+                         <strong style={{ fontSize: '1.4rem', color: 'var(--text-primary)', fontWeight: 800 }}>₹{balance.toFixed(2)}</strong>
                          {balance > 0 && selectedVendor.kyc_status === 'active' && (
                            <button
                              className="btn btn-primary"
@@ -493,7 +519,7 @@ export const Vendors = () => {
                 </div>
 
                 {/* Transfers Table */}
-                <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff', marginBottom: '1rem' }}>Split Payout Transfers Ledger</h4>
+                <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '1rem' }}>Split Payout Transfers Ledger</h4>
                 <div className="table-container" style={{ margin: 0, maxHeight: '250px', overflowY: 'auto' }}>
                   {transfers.length === 0 ? (
                     <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>No split transfers recorded for this vendor.</p>
@@ -511,7 +537,7 @@ export const Vendors = () => {
                       </thead>
                       <tbody>
                         {transfers.map(t => {
-                          let badgeColor = 'rgba(255,255,255,0.06)';
+                          let badgeColor = 'var(--bg-active)';
                           let textClr = 'var(--text-muted)';
                           if (t.status === 'settled') {
                             badgeColor = 'rgba(16, 185, 129, 0.1)';
@@ -562,6 +588,15 @@ export const Vendors = () => {
             </p>
 
             <form onSubmit={handlePayoutSubmit}>
+              {payoutError && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px', padding: '0.75rem 1rem', color: 'hsl(350, 89%, 75%)',
+                  fontSize: '0.85rem', marginBottom: '1.25rem'
+                }}>
+                  {payoutError}
+                </div>
+              )}
               <div className="form-group">
                 <label className="form-label">Available Balance</label>
                 <input 

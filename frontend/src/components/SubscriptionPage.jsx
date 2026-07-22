@@ -87,7 +87,10 @@ export const SubscriptionPage = () => {
     loadSubscriptionStatus();
   }, [loadPlans, loadInvoices, loadSubscriptionStatus]);
 
-  const isActive = subscription?.status === 'active';
+  const isExpired = subscription?.status === 'expired' || (
+    subscription?.current_period_end && new Date(subscription.current_period_end) < new Date()
+  );
+  const isActive = subscription?.status === 'active' && !isExpired;
   const currentPlanId = subscription?.plan_id;
 
   const handleCheckout = async (planId) => {
@@ -239,7 +242,9 @@ export const SubscriptionPage = () => {
         <p style={{ color: 'var(--text-secondary)' }}>
           {isActive
             ? 'You have an active subscription. View your plan details and billing history below.'
-            : 'Choose a plan to activate your workspace and unlock all features.'}
+            : isExpired
+              ? 'Your subscription plan has expired. Please choose a plan below to renew and reactivate.'
+              : 'Choose a plan to activate your workspace and unlock all features.'}
         </p>
       </div>
 
@@ -268,6 +273,28 @@ export const SubscriptionPage = () => {
               Renews {new Date(subscription.current_period_end).toLocaleDateString()}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Expired Subscription Status Bar */}
+      {isExpired && subscription && (
+        <div
+          style={{
+            display: 'flex', alignItems: 'center', gap: '1.5rem',
+            padding: '1rem 1.5rem', marginBottom: '2rem',
+            background: 'rgba(239, 68, 68, 0.06)',
+            border: '1px solid rgba(239, 68, 68, 0.2)',
+            borderRadius: '12px'
+          }}
+        >
+          <Clock size={20} style={{ color: 'var(--accent-danger)', flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <span style={{ fontWeight: 600, color: 'var(--accent-danger)' }}>Plan Expired — </span>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{subscription.plan_name}</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginLeft: '0.5rem' }}>
+              Expired on {subscription.current_period_end ? new Date(subscription.current_period_end).toLocaleDateString() : 'N/A'}
+            </span>
+          </div>
         </div>
       )}
 
@@ -467,7 +494,7 @@ export const SubscriptionPage = () => {
                 </thead>
                 <tbody>
                   {invoices.map((inv) => {
-                    let badgeColor = 'rgba(255,255,255,0.06)';
+                    let badgeColor = 'var(--bg-active)';
                     let textClr = 'var(--text-muted)';
                     if (inv.status === 'paid') {
                       badgeColor = 'rgba(16, 185, 129, 0.1)';
@@ -479,7 +506,7 @@ export const SubscriptionPage = () => {
                       badgeColor = 'rgba(239, 68, 68, 0.1)';
                       textClr = 'var(--accent-danger)';
                     } else if (inv.status === 'void') {
-                      badgeColor = 'rgba(255, 255, 255, 0.05)';
+                      badgeColor = 'var(--bg-active)';
                       textClr = 'var(--text-muted)';
                     }
 
@@ -496,7 +523,7 @@ export const SubscriptionPage = () => {
                         <td style={{ textAlign: 'right', color: 'var(--text-secondary)' }}>
                           ₹{parseFloat(inv.tax_amount).toFixed(2)}
                         </td>
-                        <td style={{ textAlign: 'right', fontWeight: 600, color: '#fff' }}>
+                        <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-primary)' }}>
                           ₹{parseFloat(inv.total_amount).toFixed(2)}
                         </td>
                         <td>

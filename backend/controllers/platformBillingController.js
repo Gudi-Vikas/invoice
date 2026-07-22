@@ -1,4 +1,5 @@
 import { runWithoutRLS } from '../config/db.js';
+import eventBus from '../services/eventBus.js';
 
 // ─── Invoice Number Generator ──────────────────────────────────────────────
 // Format: UKEY-BILL-YYYYMM-NNNN  (e.g. UKEY-BILL-202406-0001)
@@ -217,6 +218,13 @@ export const platformBillingController = {
         };
       });
 
+      eventBus.emit('platform_billing.created', {
+        invoiceId: invoice.invoice.id,
+        invoiceNumber: invoice.invoice.invoice_number,
+        tenantId: invoice.tenant.id,
+        amount: invoice.invoice.total_amount
+      });
+
       return res.status(201).json({
         message: `Billing invoice ${invoice.invoice.invoice_number} generated.`,
         invoice: invoice.invoice,
@@ -233,8 +241,10 @@ export const platformBillingController = {
   //    Query params: cursor, limit, status, tenantId, from (date), to (date)
   // ───────────────────────────────────────────────────────────────────────────
   listInvoices: async (req, res, next) => {
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
-    const { status, tenantId: filterTenantId, from, to, cursor } = req.query;
+    const offset = (page - 1) * limit;
+    const { status, tenantId: filterTenantId, from, to } = req.query;
 
     try {
       const result = await runWithoutRLS(async (client) => {
@@ -247,55 +257,42 @@ export const platformBillingController = {
         if (from)           { conditions.push(`bi.created_at >= $${idx++}`);        params.push(from); }
         if (to)             { conditions.push(`bi.created_at <= $${idx++}`);        params.push(to); }
 
-        if (cursor) {
-          const decoded = decodeCursor(cursor);
-          if (decoded) {
-            conditions.push(`(bi.created_at, bi.id) < ($${idx++}::timestamp, $${idx++}::uuid)`);
-            params.push(decoded.createdAt, decoded.id);
-          }
-        }
-
         const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-        // Query limit + 1 rows to determine if there is a next page
-        const queryLimit = limit + 1;
+        const [rows, total] = await Promise.all([
+          client.query(
+            `SELECT
+               bi.id, bi.invoice_number, bi.status,
+               bi.amount, bi.tax_amount, bi.total_amount, bi.tax_percentage,
+               bi.billing_period_start, bi.billing_period_end,
+               bi.due_date, bi.paid_at, bi.created_at,
+               t.name  AS tenant_name,
+               t.domain AS tenant_domain,
+               p.name  AS plan_name
+             FROM platform_billing_invoices bi
+             JOIN tenants t ON t.id = bi.tenant_id
+             LEFT JOIN plans p ON p.id = bi.plan_id
+             ${where}
+             ORDER BY bi.created_at DESC, bi.id DESC
+             LIMIT $${idx} OFFSET $${idx + 1}`,
+            [...params, limit, offset]
+          ),
+          client.query(
+            `SELECT COUNT(*) FROM platform_billing_invoices bi ${where}`,
+            params
+          )
+        ]);
 
-        const queryRes = await client.query(
-          `SELECT
-             bi.id, bi.invoice_number, bi.status,
-             bi.amount, bi.tax_amount, bi.total_amount, bi.tax_percentage,
-             bi.billing_period_start, bi.billing_period_end,
-             bi.due_date, bi.paid_at, bi.created_at,
-             t.name  AS tenant_name,
-             t.domain AS tenant_domain,
-             p.name  AS plan_name
-           FROM platform_billing_invoices bi
-           JOIN tenants t ON t.id = bi.tenant_id
-           LEFT JOIN plans p ON p.id = bi.plan_id
-           ${where}
-           ORDER BY bi.created_at DESC, bi.id DESC
-           LIMIT $${idx}`,
-          [...params, queryLimit]
-        );
-
-        const rows = queryRes.rows;
-        const hasMore = rows.length > limit;
-        const dataRows = hasMore ? rows.slice(0, limit) : rows;
-
-        let nextCursor = null;
-        if (hasMore && dataRows.length > 0) {
-          const lastItem = dataRows[dataRows.length - 1];
-          nextCursor = encodeCursor(lastItem.created_at, lastItem.id);
-        }
-
-        return { rows: dataRows, nextCursor };
+        return { rows: rows.rows, total: parseInt(total.rows[0].count) };
       });
 
       return res.json({
         invoices: result.rows,
         pagination: {
+          page,
           limit,
-          nextCursor: result.nextCursor
+          total: result.total,
+          totalPages: Math.ceil(result.total / limit)
         }
       });
     } catch (err) {
@@ -364,6 +361,13 @@ export const platformBillingController = {
         });
       }
 
+      eventBus.emit('platform_billing.paid', {
+        invoiceId: result.rows[0].id,
+        invoiceNumber: result.rows[0].invoice_number,
+        tenantId: result.rows[0].tenant_id,
+        amount: result.rows[0].total_amount
+      });
+
       return res.json({
         message: `Invoice ${result.rows[0].invoice_number} marked as paid.`,
         invoice: result.rows[0]
@@ -402,6 +406,12 @@ export const platformBillingController = {
           error: 'Invoice not found, already voided, or already paid (paid invoices cannot be voided).'
         });
       }
+
+      eventBus.emit('platform_billing.voided', {
+        invoiceId: result.rows[0].id,
+        invoiceNumber: result.rows[0].invoice_number,
+        tenantId: result.rows[0].tenant_id
+      });
 
       return res.json({
         message: `Invoice ${result.rows[0].invoice_number} has been voided.`,

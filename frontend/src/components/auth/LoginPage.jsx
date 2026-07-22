@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Layers, LogIn, UserPlus, ArrowRight } from 'lucide-react';
+import ThemeToggle from '../ThemeToggle';
 
 /**
  * LoginPage — Full-screen glassmorphism login/signup page.
@@ -58,6 +59,11 @@ export const LoginPage = () => {
       {/* Background Gradient Orbs */}
       <div className="auth-bg-orb auth-bg-orb-1" />
       <div className="auth-bg-orb auth-bg-orb-2" />
+
+      {/* Theme Toggle Top Right */}
+      <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', zIndex: 10 }}>
+        <ThemeToggle />
+      </div>
 
       <div className="auth-card glass-card fade-in">
         {/* Brand Header */}

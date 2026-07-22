@@ -27,7 +27,7 @@ export const enforceLimit = (featureKey, tableName, opts = {}) => {
           `SELECT pf.usage_limit
            FROM subscriptions s
            JOIN plan_features pf ON pf.plan_id = s.plan_id AND pf.feature_key = $2
-           WHERE s.tenant_id = $1 AND s.status = 'active'
+           WHERE s.tenant_id = $1 AND s.status = 'active' AND s.current_period_end >= CURRENT_TIMESTAMP
            ORDER BY s.created_at DESC
            LIMIT 1`,
           [req.tenantId, featureKey]

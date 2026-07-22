@@ -77,6 +77,7 @@ export const MasterTenants = () => {
           <option value="">All Statuses</option>
           <option value="active">Active</option>
           <option value="suspended">Suspended</option>
+          <option value="past_due">Past Due</option>
           <option value="trial">Trial</option>
         </select>
       </div>
@@ -110,7 +111,7 @@ export const MasterTenants = () => {
                     <td style={{ color: 'var(--text-secondary)' }}>{t.plan_name || '—'}</td>
                     <td>{t.user_count || 0}</td>
                     <td>
-                      <span className={`badge badge-${t.status === 'active' ? 'paid' : t.status === 'suspended' ? 'overdue' : 'draft'}`}>
+                      <span className={`badge badge-${t.status === 'active' ? 'paid' : (t.status === 'suspended' || t.status === 'past_due') ? 'overdue' : 'draft'}`}>
                         {t.status}
                       </span>
                     </td>

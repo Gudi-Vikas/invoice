@@ -1,4 +1,6 @@
-import { ArrowLeft, Printer, Loader, CreditCard } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft, Printer, Loader, CreditCard, Download } from 'lucide-react';
+import { downloadElementAsPdf } from '../../utils/pdfUtils';
 
 export const PlatformInvoiceVisualizer = ({ 
   invoice, 
@@ -8,7 +10,21 @@ export const PlatformInvoiceVisualizer = ({
   isPaying, 
   showPayButton = false 
 }) => {
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
   if (!invoice) return null;
+
+  const handleDownloadPdf = async () => {
+    setIsDownloadingPdf(true);
+    try {
+      const fileName = `platform_invoice_${invoice.invoice_number || 'download'}.pdf`;
+      await downloadElementAsPdf('print-area', fileName);
+    } catch (err) {
+      console.error('PDF download error:', err);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   return (
     <div>
@@ -22,11 +38,23 @@ export const PlatformInvoiceVisualizer = ({
             Platform Invoice
           </span>
           <button
+            className="btn btn-primary"
+            onClick={handleDownloadPdf}
+            disabled={isDownloadingPdf}
+            style={{ gap: '0.5rem' }}
+          >
+            {isDownloadingPdf ? (
+              <><Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> Generating PDF...</>
+            ) : (
+              <><Download size={15} /> Download PDF</>
+            )}
+          </button>
+          <button
             className="btn btn-secondary"
             onClick={() => window.print()}
             style={{ gap: '0.5rem' }}
           >
-            <Printer size={15} /> Print / PDF
+            <Printer size={15} /> Print
           </button>
           
           {showPayButton && (invoice.status === 'pending' || invoice.status === 'overdue') && (

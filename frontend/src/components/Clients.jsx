@@ -28,10 +28,12 @@ export const Clients = () => {
   const [addForm, setAddForm] = useState({
     name: '', email: '', street: '', city: '', state: '', zip: '', country: 'India', extraInfo: ''
   });
+  const [addError, setAddError] = useState('');
 
   // Edit client panel state
   const [editingClient, setEditingClient] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [editError, setEditError] = useState('');
 
   // Feedback
   const [feedback, setFeedback] = useState({ type: '', message: '' });
@@ -76,6 +78,7 @@ export const Clients = () => {
     if (!addForm.name || !addForm.email || saving) return;
 
     setSaving(true);
+    setAddError('');
     try {
       await api.createClient({
         name: addForm.name,
@@ -88,7 +91,7 @@ export const Clients = () => {
       showFeedback('success', 'Client registered successfully.');
       loadClients();
     } catch (err) {
-      showFeedback('error', 'Failed to register client: ' + err.message);
+      setAddError(err.message || 'Failed to register client.');
     } finally {
       setSaving(false);
     }
@@ -97,6 +100,7 @@ export const Clients = () => {
   // ─── EDIT CLIENT ─────────────────────────────────────────────────────────────
   const openEdit = (client) => {
     setEditingClient(client);
+    setEditError('');
     setEditForm({
       name: client.name,
       email: client.email,
@@ -114,6 +118,7 @@ export const Clients = () => {
     if (!editingClient || saving) return;
 
     setSaving(true);
+    setEditError('');
     try {
       await api.updateClient(editingClient.id, {
         name: editForm.name,
@@ -125,7 +130,7 @@ export const Clients = () => {
       showFeedback('success', 'Client updated successfully.');
       loadClients();
     } catch (err) {
-      showFeedback('error', 'Failed to update client: ' + err.message);
+      setEditError(err.message || 'Failed to update client.');
     } finally {
       setSaving(false);
     }
@@ -323,6 +328,15 @@ export const Clients = () => {
             </div>
 
             <form onSubmit={handleAddSubmit}>
+              {addError && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px', padding: '0.75rem 1rem', color: 'hsl(350, 89%, 75%)',
+                  fontSize: '0.85rem', marginBottom: '1.25rem'
+                }}>
+                  {addError}
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div className="form-group">
                   <label className="form-label">Client / Business Name *</label>
@@ -407,6 +421,15 @@ export const Clients = () => {
             </div>
 
             <form onSubmit={handleEditSubmit}>
+              {editError && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px', padding: '0.75rem 1rem', color: 'hsl(350, 89%, 75%)',
+                  fontSize: '0.85rem', marginBottom: '1.25rem'
+                }}>
+                  {editError}
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div className="form-group">
                   <label className="form-label">Client Name *</label>

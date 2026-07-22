@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { io } from 'socket.io-client';
 import api from '../api';
 import { useAuth } from './AuthContext';
+import { useToast } from './ToastContext';
 
 /**
  * NotificationContext — Lightweight sidebar badge count provider.
@@ -39,6 +40,7 @@ const DEFAULT_MASTER_COUNTS = {
 
 export const NotificationProvider = ({ children }) => {
   const { isAuthenticated, isMasterAdmin } = useAuth();
+  const { showToast } = useToast();
 
   const [tenantCounts, setTenantCounts] = useState(DEFAULT_TENANT_COUNTS);
   const [masterCounts, setMasterCounts] = useState(DEFAULT_MASTER_COUNTS);
@@ -132,6 +134,10 @@ export const NotificationProvider = ({ children }) => {
       socketRef.current.on('notification', (newNotification) => {
         console.log('[NotificationService] New notification received:', newNotification);
         
+        if (newNotification && newNotification.title) {
+          showToast(`${newNotification.title}: ${newNotification.message}`, 'info');
+        }
+
         // Refetch counts and feed to stay perfectly in sync without complex merging logic
         fetchCounts();
       });

@@ -143,7 +143,7 @@ export const MasterDashboard = () => {
             ].map((item, i) => (
               <div key={i} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '0.75rem 1rem', background: 'rgba(255,255,255,0.02)',
+                padding: '0.75rem 1rem', background: 'var(--bg-active)',
                 border: '1px solid var(--border-color)', borderRadius: '10px'
               }}>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{item.label}</span>

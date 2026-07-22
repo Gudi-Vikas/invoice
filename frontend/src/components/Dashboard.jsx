@@ -130,7 +130,7 @@ export const Dashboard = () => {
     { label: 'Accepted',  key: 'accepted',  color: 'hsl(262, 83%, 65%)' },
     { label: 'Overdue',   key: 'overdue',   color: 'var(--accent-danger)' },
     { label: 'Draft',     key: 'draft',     color: 'var(--text-muted)' },
-    { label: 'Voided',    key: 'voided',    color: 'rgba(255,255,255,0.15)' },
+    { label: 'Voided',    key: 'voided',    color: 'var(--text-muted)' },
   ].map(s => ({ ...s, count: statusBreakdown[s.key] || 0 })).filter(s => s.count > 0);
   const donutTotal = donutData.reduce((a, b) => a + b.count, 0);
 

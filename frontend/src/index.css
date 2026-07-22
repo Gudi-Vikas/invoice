@@ -91,6 +91,55 @@
   color: hsl(350, 89%, 30%) !important;
 }
 
+/* Light Mode Status Badges */
+[data-theme="light"] .badge-draft {
+  background-color: rgba(0, 0, 0, 0.06);
+  color: hsl(220, 20%, 32%);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .badge-published {
+  background-color: rgba(59, 130, 246, 0.12);
+  color: hsl(217, 90%, 35%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+[data-theme="light"] .badge-paid {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: hsl(142, 75%, 28%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+[data-theme="light"] .badge-accepted {
+  background-color: rgba(139, 92, 246, 0.12);
+  color: hsl(262, 75%, 38%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+[data-theme="light"] .badge-overdue {
+  background-color: rgba(239, 68, 68, 0.12);
+  color: hsl(350, 85%, 38%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+[data-theme="light"] .badge-sent {
+  background-color: rgba(59, 130, 246, 0.12);
+  color: hsl(217, 90%, 35%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+[data-theme="light"] .badge-rejected {
+  background-color: rgba(239, 68, 68, 0.12);
+  color: hsl(350, 85%, 38%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+[data-theme="light"] .badge-voided {
+  background-color: rgba(107, 114, 128, 0.12);
+  color: hsl(215, 16%, 35%);
+  border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
 /* Light Mode Invoice Border adjustments to prevent blending */
 [data-theme="light"] .invoice-container {
   border: 1px solid rgba(0, 0, 0, 0.12) !important;
@@ -321,7 +370,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Glassmorphism Card Panels */
 .glass-card, .admin-card, .plan-card, .billing-card {
-  background: rgb(22 25 37);
+  background: var(--bg-card);
   backdrop-filter: blur(var(--card-blur));
   -webkit-backdrop-filter: blur(var(--card-blur));
   border: 1px solid var(--border-color);
