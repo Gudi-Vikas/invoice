@@ -210,7 +210,7 @@ export const masterAdminController = {
                s.current_period_end,
                COUNT(tu.user_id) AS user_count
              FROM tenants t
-             LEFT JOIN subscriptions s  ON s.tenant_id = t.id AND s.status = 'active'
+             LEFT JOIN subscriptions s  ON s.tenant_id = t.id
              LEFT JOIN plans p          ON p.id = s.plan_id
              LEFT JOIN tenant_users tu  ON tu.tenant_id = t.id
              ${where}
@@ -221,7 +221,7 @@ export const masterAdminController = {
             [...params, limit, offset]
           ),
           client.query(
-            `SELECT COUNT(*) FROM tenants t ${where}`,
+            `SELECT COUNT(DISTINCT t.id) FROM tenants t LEFT JOIN subscriptions s ON s.tenant_id = t.id ${where}`,
             params
           )
         ]);
@@ -1081,10 +1081,10 @@ export const masterAdminController = {
 
         // Fetch suspended tenants
         const suspendedTenantsQuery = await client.query(`
-          SELECT id, name, updated_at
+          SELECT id, name, created_at
           FROM tenants
           WHERE status = 'suspended'
-          ORDER BY updated_at DESC
+          ORDER BY created_at DESC
           LIMIT 5
         `);
         suspendedTenantsQuery.rows.forEach(t => {
@@ -1094,7 +1094,7 @@ export const masterAdminController = {
             title: `Suspended: ${t.name}`,
             message: 'Tenant account suspended',
             actionUrl: `/master/tenants/${t.id}`,
-            date: t.updated_at,
+            date: t.created_at,
             status: 'danger'
           });
         });
