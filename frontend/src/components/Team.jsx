@@ -94,7 +94,7 @@ const ModalOverlay = ({ children, onClose }) => (
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="admin-card"
+        className="admin-card modal-card"
         style={{ width: '100%', maxWidth: '520px', padding: '2rem', animation: 'slideUp 0.3s ease', maxHeight: '90vh', overflowY: 'auto' }}
       >
         {children}

@@ -397,29 +397,48 @@ h1, h2, h3, h4, h5, h6 {
   right: 0;
   width: auto;
   height: 100vh;
-  background-color: rgba(0, 0, 0, 0.35);
+  background-color: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  padding: 0;
+  padding: 1rem;
   margin: 0;
   transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.modal-card {
+.modal-card,
+.modal-overlay > div {
   width: min(100%, var(--modal-width, 520px));
   max-height: 90vh;
   overflow-y: auto;
+  opacity: 1 !important;
+  background: hsl(230, 16%, 10%) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-theme="light"] .modal-card,
+[data-theme="light"] .modal-overlay > div {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
 }
 
 @media (max-width: 720px) {
   .modal-overlay {
     left: 0;
     right: 0;
+    width: 100vw;
   }
 
-  .modal-card {
+  .modal-card,
+  .modal-overlay > div {
     padding: 1.25rem;
     max-height: 90vh;
   }

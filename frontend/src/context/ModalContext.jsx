@@ -69,7 +69,7 @@ export const ModalProvider = ({ children }) => {
             style={{ zIndex: 9999, opacity: 1, pointerEvents: 'auto' }}
           />
           <div 
-            className="glass-card"
+            className="glass-card modal-card"
             style={{
               position: 'fixed',
               top: '50%',
