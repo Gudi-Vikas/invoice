@@ -7,6 +7,7 @@ import {
   Users, UserPlus, FileText, Edit2, X, Check, Search, ChevronLeft, ChevronRight,
   Mail, MapPin
 } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 /**
  * Clients Management Page.
@@ -318,174 +319,178 @@ export const Clients = () => {
 
       {/* ==================== ADD CLIENT MODAL ==================== */}
       {showAddModal && (
-        <div className="modal-overlay">
-          <div className="glass-card modal-card" style={{ '--modal-width': '520px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Register New Client</h3>
-              <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => setShowAddModal(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddSubmit}>
-              {addError && (
-                <div style={{
-                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
-                  borderRadius: '8px', padding: '0.75rem 1rem', color: 'hsl(350, 89%, 75%)',
-                  fontSize: '0.85rem', marginBottom: '1.25rem'
-                }}>
-                  {addError}
-                </div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Client / Business Name *</label>
-                  <input type="text" className="form-input" value={addForm.name}
-                    onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder="e.g. Acme Pvt Ltd" required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Email Address *</label>
-                  <input type="email" className="form-input" value={addForm.email}
-                    onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
-                    placeholder="billing@company.com" required />
-                </div>
-              </div>
-
-              <h4 style={{ fontSize: '0.9rem', color: 'var(--accent-primary)', marginBottom: '0.75rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem' }}>
-                Billing Address
-              </h4>
-
-              <div className="form-group">
-                <label className="form-label">Street Address</label>
-                <input type="text" className="form-input" value={addForm.street}
-                  onChange={e => setAddForm(f => ({ ...f, street: e.target.value }))}
-                  placeholder="123 MG Road" />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
-                <div className="form-group">
-                  <label className="form-label">City</label>
-                  <input type="text" className="form-input" value={addForm.city}
-                    onChange={e => setAddForm(f => ({ ...f, city: e.target.value }))}
-                    placeholder="Hyderabad" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">State</label>
-                  <input type="text" className="form-input" value={addForm.state}
-                    onChange={e => setAddForm(f => ({ ...f, state: e.target.value }))}
-                    placeholder="Telangana" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">PIN / ZIP</label>
-                  <input type="text" className="form-input" value={addForm.zip}
-                    onChange={e => setAddForm(f => ({ ...f, zip: e.target.value }))}
-                    placeholder="500032" />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Extra Info (GST / PAN / Notes)</label>
-                <textarea className="form-textarea" style={{ height: '70px' }} value={addForm.extraInfo}
-                  onChange={e => setAddForm(f => ({ ...f, extraInfo: e.target.value }))}
-                  placeholder="GSTIN: 36AADCU5062A1ZO" />
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Appears on the invoice header. HTML tags are supported.
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>
-                  <UserPlus size={16} /> {saving ? 'Creating...' : 'Create Client'}
+        <ModalPortal>
+          <div className="modal-overlay">
+            <div className="glass-card modal-card" style={{ '--modal-width': '520px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Register New Client</h3>
+                <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => setShowAddModal(false)}>
+                  <X size={18} />
                 </button>
               </div>
-            </form>
+
+              <form onSubmit={handleAddSubmit}>
+                {addError && (
+                  <div style={{
+                    background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '8px', padding: '0.75rem 1rem', color: 'hsl(350, 89%, 75%)',
+                    fontSize: '0.85rem', marginBottom: '1.25rem'
+                  }}>
+                    {addError}
+                  </div>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Client / Business Name *</label>
+                    <input type="text" className="form-input" value={addForm.name}
+                      onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="e.g. Acme Pvt Ltd" required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Email Address *</label>
+                    <input type="email" className="form-input" value={addForm.email}
+                      onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
+                      placeholder="billing@company.com" required />
+                  </div>
+                </div>
+
+                <h4 style={{ fontSize: '0.9rem', color: 'var(--accent-primary)', marginBottom: '0.75rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem' }}>
+                  Billing Address
+                </h4>
+
+                <div className="form-group">
+                  <label className="form-label">Street Address</label>
+                  <input type="text" className="form-input" value={addForm.street}
+                    onChange={e => setAddForm(f => ({ ...f, street: e.target.value }))}
+                    placeholder="123 MG Road" />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">City</label>
+                    <input type="text" className="form-input" value={addForm.city}
+                      onChange={e => setAddForm(f => ({ ...f, city: e.target.value }))}
+                      placeholder="Hyderabad" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">State</label>
+                    <input type="text" className="form-input" value={addForm.state}
+                      onChange={e => setAddForm(f => ({ ...f, state: e.target.value }))}
+                      placeholder="Telangana" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">PIN / ZIP</label>
+                    <input type="text" className="form-input" value={addForm.zip}
+                      onChange={e => setAddForm(f => ({ ...f, zip: e.target.value }))}
+                      placeholder="500032" />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Extra Info (GST / PAN / Notes)</label>
+                  <textarea className="form-textarea" style={{ height: '70px' }} value={addForm.extraInfo}
+                    onChange={e => setAddForm(f => ({ ...f, extraInfo: e.target.value }))}
+                    placeholder="GSTIN: 36AADCU5062A1ZO" />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Appears on the invoice header. HTML tags are supported.
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>
+                    <UserPlus size={16} /> {saving ? 'Creating...' : 'Create Client'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
 
       {/* ==================== EDIT CLIENT PANEL ==================== */}
       {editingClient && (
-        <div className="modal-overlay">
-          <div className="glass-card modal-card" style={{ '--modal-width': '520px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Edit Client</h3>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>ID: {editingClient.id}</p>
-              </div>
-              <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => setEditingClient(null)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleEditSubmit}>
-              {editError && (
-                <div style={{
-                  background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
-                  borderRadius: '8px', padding: '0.75rem 1rem', color: 'hsl(350, 89%, 75%)',
-                  fontSize: '0.85rem', marginBottom: '1.25rem'
-                }}>
-                  {editError}
+        <ModalPortal>
+          <div className="modal-overlay">
+            <div className="glass-card modal-card" style={{ '--modal-width': '520px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700 }}>Edit Client</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>ID: {editingClient.id}</p>
                 </div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Client Name *</label>
-                  <input type="text" className="form-input" value={editForm.name}
-                    onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} required />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Email Address *</label>
-                  <input type="email" className="form-input" value={editForm.email}
-                    onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} required />
-                </div>
-              </div>
-
-              <h4 style={{ fontSize: '0.9rem', color: 'var(--accent-primary)', marginBottom: '0.75rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem' }}>
-                Billing Address
-              </h4>
-
-              <div className="form-group">
-                <label className="form-label">Street</label>
-                <input type="text" className="form-input" value={editForm.street}
-                  onChange={e => setEditForm(f => ({ ...f, street: e.target.value }))} />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
-                <div className="form-group">
-                  <label className="form-label">City</label>
-                  <input type="text" className="form-input" value={editForm.city}
-                    onChange={e => setEditForm(f => ({ ...f, city: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">State</label>
-                  <input type="text" className="form-input" value={editForm.state}
-                    onChange={e => setEditForm(f => ({ ...f, state: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">PIN / ZIP</label>
-                  <input type="text" className="form-input" value={editForm.zip}
-                    onChange={e => setEditForm(f => ({ ...f, zip: e.target.value }))} />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Extra Info</label>
-                <textarea className="form-textarea" style={{ height: '70px' }} value={editForm.extraInfo}
-                  onChange={e => setEditForm(f => ({ ...f, extraInfo: e.target.value }))} />
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setEditingClient(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>
-                  <Check size={16} /> {saving ? 'Saving...' : 'Save Changes'}
+                <button className="btn btn-secondary" style={{ padding: '0.4rem' }} onClick={() => setEditingClient(null)}>
+                  <X size={18} />
                 </button>
               </div>
-            </form>
+
+              <form onSubmit={handleEditSubmit}>
+                {editError && (
+                  <div style={{
+                    background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '8px', padding: '0.75rem 1rem', color: 'hsl(350, 89%, 75%)',
+                    fontSize: '0.85rem', marginBottom: '1.25rem'
+                  }}>
+                    {editError}
+                  </div>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Client Name *</label>
+                    <input type="text" className="form-input" value={editForm.name}
+                      onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Email Address *</label>
+                    <input type="email" className="form-input" value={editForm.email}
+                      onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} required />
+                  </div>
+                </div>
+
+                <h4 style={{ fontSize: '0.9rem', color: 'var(--accent-primary)', marginBottom: '0.75rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.25rem' }}>
+                  Billing Address
+                </h4>
+
+                <div className="form-group">
+                  <label className="form-label">Street</label>
+                  <input type="text" className="form-input" value={editForm.street}
+                    onChange={e => setEditForm(f => ({ ...f, street: e.target.value }))} />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">City</label>
+                    <input type="text" className="form-input" value={editForm.city}
+                      onChange={e => setEditForm(f => ({ ...f, city: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">State</label>
+                    <input type="text" className="form-input" value={editForm.state}
+                      onChange={e => setEditForm(f => ({ ...f, state: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">PIN / ZIP</label>
+                    <input type="text" className="form-input" value={editForm.zip}
+                      onChange={e => setEditForm(f => ({ ...f, zip: e.target.value }))} />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Extra Info</label>
+                  <textarea className="form-textarea" style={{ height: '70px' }} value={editForm.extraInfo}
+                    onChange={e => setEditForm(f => ({ ...f, extraInfo: e.target.value }))} />
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setEditingClient(null)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={saving} style={{ opacity: saving ? 0.7 : 1 }}>
+                    <Check size={16} /> {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

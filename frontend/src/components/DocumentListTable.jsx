@@ -5,7 +5,7 @@ import api from '../api';
 import { useToast } from '../context/ToastContext';
 import { useSettings } from '../context/SettingsContext';
 
-const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPayment, onConvertQuote }) => {
+const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPayment, onConvertQuote, copiedId }) => {
   const { settings } = useSettings();
   const { showToast } = useToast();
   const [searchParams] = useSearchParams();
@@ -256,11 +256,11 @@ const DocumentListTable = ({ defaultType, onViewDetails, onCopyLink, onVerifyPay
                         </button>
                         <button
                           className="btn btn-secondary"
-                          style={{ padding: '0.4rem 0.5rem' }}
+                          style={{ padding: '0.4rem 0.5rem', color: copiedId === doc.id ? 'var(--accent-success)' : 'inherit', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
                           onClick={() => onCopyLink(doc)}
                           title="Copy Magic Link"
                         >
-                          <Copy size={14} />
+                          {copiedId === doc.id ? <><Check size={14} /> Copied</> : <Copy size={14} />}
                         </button>
                       </div>
                     </td>

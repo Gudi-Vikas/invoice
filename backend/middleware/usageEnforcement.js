@@ -24,7 +24,7 @@ export const enforceLimit = (featureKey, tableName, opts = {}) => {
       const check = await runInTransaction(req.tenantId, async (client) => {
         // 1. Get the tenant's active plan features
         const subRes = await client.query(
-          `SELECT pf.usage_limit
+          `SELECT pf.usage_limit, s.current_period_start
            FROM subscriptions s
            JOIN plan_features pf ON pf.plan_id = s.plan_id AND pf.feature_key = $2
            WHERE s.tenant_id = $1 AND s.status = 'active' AND s.current_period_end >= CURRENT_TIMESTAMP
@@ -39,6 +39,7 @@ export const enforceLimit = (featureKey, tableName, opts = {}) => {
         }
 
         const limit = subRes.rows[0].usage_limit;
+        const currentPeriodStart = subRes.rows[0].current_period_start;
 
         // -1 = unlimited
         if (limit === -1) {
@@ -49,9 +50,10 @@ export const enforceLimit = (featureKey, tableName, opts = {}) => {
         let countQuery = `SELECT COUNT(*) AS count FROM ${tableName} WHERE tenant_id = $1`;
         const countParams = [req.tenantId];
 
-        // Monthly counting for per-month limits
+        // Monthly counting for per-month limits based on subscription billing cycle
         if (opts.monthly) {
-          countQuery += ` AND created_at >= DATE_TRUNC('month', CURRENT_DATE)`;
+          countQuery += ` AND created_at >= $2`;
+          countParams.push(currentPeriodStart);
         }
 
         // Additional filter (e.g. document type)

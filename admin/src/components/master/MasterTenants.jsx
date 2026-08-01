@@ -59,7 +59,7 @@ export const MasterTenants = () => {
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
         <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.5rem', flex: 1, minWidth: '300px' }}>
           <input
-            type="text" className="form-input" placeholder="Search by name or domain..."
+            type="text" className="form-input" placeholder="Search by name, domain, or phone..."
             value={search} onChange={(e) => setSearch(e.target.value)}
             style={{ flex: 1 }}
           />
@@ -95,6 +95,7 @@ export const MasterTenants = () => {
                 <tr>
                   <th>Name</th>
                   <th>Domain</th>
+                  <th>Contact Phone</th>
                   <th>Plan</th>
                   <th>Users</th>
                   <th>Status</th>
@@ -105,9 +106,10 @@ export const MasterTenants = () => {
               <tbody>
                 {tenants.map(t => (
                   <tr key={t.id} style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/master/tenants/${t.id}`)}>
+                    onClick={() => navigate(`/tenants/${t.id}`)}>
                     <td style={{ fontWeight: 600 }}>{t.name}</td>
                     <td style={{ color: 'var(--text-muted)' }}>{t.domain || '—'}</td>
+                    <td style={{ color: 'var(--text-secondary)' }}>{t.phone || '—'}</td>
                     <td style={{ color: 'var(--text-secondary)' }}>{t.plan_name || '—'}</td>
                     <td>{t.user_count || 0}</td>
                     <td>

@@ -150,14 +150,21 @@ export const NotificationPanel = () => {
                 className="btn btn-secondary" 
                 style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', gap: '0.3rem', color: 'var(--accent-danger)', borderColor: 'var(--accent-danger)' }}
                 onClick={async () => {
-                  if (confirm('Are you sure you want to clear all notifications?')) {
-                    try {
-                      await api.deleteAllNotifications();
+                  try {
+                    await api.deleteAllNotifications();
+                    // Minimal animation: fade out the panel contents before clearing
+                    const feed = document.getElementById('notification-feed');
+                    if (feed) {
+                      feed.style.transition = 'opacity 0.2s ease';
+                      feed.style.opacity = '0';
+                    }
+                    setTimeout(() => {
                       setNotifications([]);
                       setGlobalUnreadCount(0);
-                    } catch (err) {
-                      console.error('Failed to clear all', err);
-                    }
+                      if (feed) feed.style.opacity = '1';
+                    }, 200);
+                  } catch (err) {
+                    console.error('Failed to clear all', err);
                   }
                 }}
                 title="Clear all notifications"
@@ -176,7 +183,7 @@ export const NotificationPanel = () => {
         </div>
 
         {/* Feed Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
+        <div id="notification-feed" style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
           {!notifications || notifications.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
               <Bell size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />

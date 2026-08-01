@@ -37,17 +37,25 @@ export const MasterLayout = () => {
     });
   }, []);
 
+  // Keep --sidebar-width CSS variable in sync with collapse state
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--sidebar-width',
+      collapsed ? '68px' : '260px'
+    );
+  }, [collapsed]);
+
   useEffect(() => {
     setMainCollapsed(collapsed);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const allMenuItems = [
-    { path: '/master/dashboard', name: 'Dashboard', icon: LayoutDashboard, perm: 'dashboard' },
-    { path: '/master/plans',     name: 'Plans',     icon: CreditCard,      perm: 'plans' },
-    { path: '/master/tenants',   name: 'Tenants',   icon: Building2,       perm: 'tenants' },
-    { path: '/master/billing',   name: 'Billing',   icon: Receipt,         perm: 'billing' },
-    { path: '/master/admins',    name: 'Admins',    icon: ShieldCheck,     perm: 'admins' }
+    { path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard, perm: 'dashboard' },
+    { path: '/plans',     name: 'Plans',     icon: CreditCard,      perm: 'plans' },
+    { path: '/tenants',   name: 'Tenants',   icon: Building2,       perm: 'tenants' },
+    { path: '/billing',   name: 'Billing',   icon: Receipt,         perm: 'billing' },
+    { path: '/admins',    name: 'Admins',    icon: ShieldCheck,     perm: 'admins' }
   ];
 
   const menuItems = masterPermissions === null || masterPermissions === undefined
@@ -82,7 +90,7 @@ export const MasterLayout = () => {
 
   const handleLogout = () => {
     logout();
-    navigate('/master/login');
+    navigate('/login');
   };
 
   return (

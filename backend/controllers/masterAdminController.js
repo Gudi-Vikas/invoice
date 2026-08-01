@@ -117,9 +117,8 @@ export const masterAdminController = {
   getDashboardStats: async (req, res, next) => {
     try {
       const stats = await runWithoutRLS(async (client) => {
-        const [tenantStats, mrrRes, recentSignups, billingStats] = await Promise.all([
-          // Tenant status breakdown
-          client.query(`
+        // Tenant status breakdown
+        const tenantStats = await client.query(`
             SELECT
               COUNT(*)                                              AS total_tenants,
               COUNT(*) FILTER (WHERE status = 'active')           AS active_tenants,
@@ -128,16 +127,16 @@ export const masterAdminController = {
               COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)  AS new_today,
               COUNT(*) FILTER (WHERE created_at >= DATE_TRUNC('month', CURRENT_DATE)) AS new_this_month
             FROM tenants
-          `),
-          // Estimated MRR (sum of active subscription plan prices)
-          client.query(`
+          `);
+        // Estimated MRR (sum of active subscription plan prices)
+        const mrrRes = await client.query(`
             SELECT COALESCE(SUM(p.price_monthly), 0) AS mrr
             FROM subscriptions s
             JOIN plans p ON p.id = s.plan_id
             WHERE s.status = 'active'
-          `),
-          // 5 most recent tenant signups
-          client.query(`
+          `);
+        // 5 most recent tenant signups
+        const recentSignups = await client.query(`
             SELECT t.id, t.name, t.domain, t.status, t.created_at,
                    p.name AS plan_name
             FROM tenants t
@@ -145,17 +144,16 @@ export const masterAdminController = {
             LEFT JOIN plans p ON p.id = s.plan_id
             ORDER BY t.created_at DESC
             LIMIT 5
-          `),
-          // Platform billing snapshot
-          client.query(`
+          `);
+        // Platform billing snapshot
+        const billingStats = await client.query(`
             SELECT
               COUNT(*) FILTER (WHERE status = 'pending')  AS pending_invoices,
               COUNT(*) FILTER (WHERE status = 'overdue')  AS overdue_invoices,
               COALESCE(SUM(total_amount) FILTER (WHERE status = 'paid'
                 AND created_at >= DATE_TRUNC('month', CURRENT_DATE)), 0) AS collected_this_month
             FROM platform_billing_invoices
-          `)
-        ]);
+          `);
 
         return {
           tenants: tenantStats.rows[0],
@@ -193,17 +191,21 @@ export const masterAdminController = {
           idx++;
         }
         if (search) {
-          conditions.push(`(t.name ILIKE $${idx} OR t.domain ILIKE $${idx})`);
+          conditions.push(`(t.name ILIKE $${idx} OR t.domain ILIKE $${idx} OR t.phone ILIKE $${idx})`);
           params.push(`%${search}%`);
           idx++;
         }
 
         const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-        const [rows, total] = await Promise.all([
-          client.query(
+        const rows = await client.query(
             `SELECT
-               t.id, t.name, t.domain, t.status, t.created_at,
+               t.id, t.name, t.domain, t.phone,
+               CASE
+                 WHEN s.current_period_end < NOW() AND t.status = 'active' THEN 'expired'
+                 ELSE t.status
+               END as status,
+               t.created_at,
                p.name            AS plan_name,
                p.price_monthly   AS plan_price,
                s.status          AS subscription_status,
@@ -214,17 +216,16 @@ export const masterAdminController = {
              LEFT JOIN plans p          ON p.id = s.plan_id
              LEFT JOIN tenant_users tu  ON tu.tenant_id = t.id
              ${where}
-             GROUP BY t.id, t.name, t.domain, t.status, t.created_at,
+             GROUP BY t.id, t.name, t.domain, t.phone, t.status, t.created_at,
                       p.name, p.price_monthly, s.status, s.current_period_end
              ORDER BY t.created_at DESC
              LIMIT $${idx} OFFSET $${idx + 1}`,
             [...params, limit, offset]
-          ),
-          client.query(
+          );
+        const total = await client.query(
             `SELECT COUNT(DISTINCT t.id) FROM tenants t LEFT JOIN subscriptions s ON s.tenant_id = t.id ${where}`,
             params
-          )
-        ]);
+          );
 
         return { rows: rows.rows, total: parseInt(total.rows[0].count) };
       });
@@ -251,10 +252,12 @@ export const masterAdminController = {
 
     try {
       const result = await runWithoutRLS(async (client) => {
-        const [tenantRow, users, subscriptionHistory, settings, billingInvoices] =
-          await Promise.all([
-            client.query(
-              `SELECT t.*,
+        const tenantRow = await client.query(
+              `SELECT t.id, t.name, t.domain, t.phone, t.created_at,
+                      CASE
+                        WHEN s.current_period_end < NOW() AND t.status = 'active' THEN 'expired'
+                        ELSE t.status
+                      END as status,
                       p.name AS plan_name, p.price_monthly,
                       s.status AS sub_status, s.current_period_end,
                       s.external_subscription_id
@@ -265,28 +268,28 @@ export const masterAdminController = {
                ORDER BY s.created_at DESC NULLS LAST
                LIMIT 1`,
               [id]
-            ),
-            client.query(
+            );
+        const users = await client.query(
               `SELECT u.id, u.email, u.created_at, tu.role
                FROM tenant_users tu
                JOIN users u ON u.id = tu.user_id
                WHERE tu.tenant_id = $1
                ORDER BY tu.role DESC, u.created_at ASC`,
               [id]
-            ),
-            client.query(
+            );
+        const subscriptionHistory = await client.query(
               `SELECT s.*, p.name AS plan_name, p.price_monthly
                FROM subscriptions s
                JOIN plans p ON p.id = s.plan_id
                WHERE s.tenant_id = $1
                ORDER BY s.created_at DESC`,
               [id]
-            ),
-            client.query(
+            );
+        const settings = await client.query(
               'SELECT business_info, general_config FROM tenant_settings WHERE tenant_id = $1',
               [id]
-            ),
-            client.query(
+            );
+        const billingInvoices = await client.query(
               `SELECT id, invoice_number, amount, tax_amount, total_amount,
                       status, billing_period_start, billing_period_end, due_date, paid_at
                FROM platform_billing_invoices
@@ -294,8 +297,7 @@ export const masterAdminController = {
                ORDER BY created_at DESC
                LIMIT 10`,
               [id]
-            )
-          ]);
+            );
 
         if (tenantRow.rows.length === 0) return null;
 
@@ -474,9 +476,23 @@ export const masterAdminController = {
 
         if (planId)           { sets.push(`plan_id = $${idx++}`);             params.push(planId); }
         if (status)           { sets.push(`status = $${idx++}`);              params.push(status); }
-        if (currentPeriodEnd) { sets.push(`current_period_end = $${idx++}`);  params.push(currentPeriodEnd); }
+        if (currentPeriodEnd !== undefined) { 
+          sets.push(`current_period_end = $${idx++}`);
+          params.push(currentPeriodEnd); 
+        }
 
         params.push(id); // tenant_id
+
+        // Auto-extend if activating an expired subscription without explicit currentPeriodEnd
+        if (status === 'active' && currentPeriodEnd === undefined) {
+           const currentSub = await client.query('SELECT current_period_end FROM subscriptions WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1', [id]);
+           if (currentSub.rows[0] && currentSub.rows[0].current_period_end && new Date(currentSub.rows[0].current_period_end) < new Date()) {
+             const newDate = new Date();
+             newDate.setFullYear(newDate.getFullYear() + 1);
+             sets.push(`current_period_end = $${idx++}`);
+             params.push(newDate.toISOString());
+           }
+        }
 
         const updated = await client.query(
           `UPDATE subscriptions
@@ -1039,20 +1055,18 @@ export const masterAdminController = {
   getMasterNotifications: async (req, res, next) => {
     try {
       const counts = await runWithoutRLS(async (client) => {
-        const [tenantRes, billingRes] = await Promise.all([
-          client.query(`
+        const tenantRes = await client.query(`
             SELECT
               COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') AS new_tenants,
               COUNT(*) FILTER (WHERE status = 'suspended')                     AS inactive_tenants
             FROM tenants
-          `),
-          client.query(`
+          `);
+        const billingRes = await client.query(`
             SELECT
               COUNT(*) FILTER (WHERE status = 'overdue')  AS overdue_invoices,
               COUNT(*) FILTER (WHERE status = 'pending')  AS pending_billing
             FROM platform_billing_invoices
-          `)
-        ]);
+          `);
 
         const t = tenantRes.rows[0];
         const b = billingRes.rows[0];

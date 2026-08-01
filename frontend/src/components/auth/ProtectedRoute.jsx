@@ -9,8 +9,8 @@ import { useAuth } from '../../context/AuthContext';
  *   <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
  *   <Route path="/master/*" element={<ProtectedRoute requireMaster><MasterLayout /></ProtectedRoute>} />
  */
-export const ProtectedRoute = ({ children, requireMaster = false }) => {
-  const { isAuthenticated, isMasterAdmin, loading } = useAuth();
+export const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated, loading } = useAuth();
 
   // Still hydrating auth state from localStorage
   if (loading) {
@@ -27,12 +27,7 @@ export const ProtectedRoute = ({ children, requireMaster = false }) => {
 
   // Not authenticated → redirect to appropriate login page
   if (!isAuthenticated) {
-    return <Navigate to={requireMaster ? '/master/login' : '/login'} replace />;
-  }
-
-  // Master admin route but user is not master admin
-  if (requireMaster && !isMasterAdmin) {
-    return <Navigate to="/master/login" replace />;
+    return <Navigate to={'/login'} replace />;
   }
 
   return children;

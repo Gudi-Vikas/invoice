@@ -4,6 +4,8 @@ import api from '../api';
 import { Save, AlertCircle, Eye, Code, Upload } from 'lucide-react';
 import { sanitizeHtmlContent } from '../utils/sanitize';
 import { useSettings } from '../context/SettingsContext';
+import { useModal } from '../context/ModalContext';
+import DocumentTemplate from './shared/DocumentTemplate';
 
 /**
  * Settings Control Dashboard.
@@ -11,6 +13,7 @@ import { useSettings } from '../context/SettingsContext';
  */
 export const Settings = () => {
   const { settings: ctxSettings, refreshSettings } = useSettings();
+  const { confirm } = useModal();
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -206,7 +209,11 @@ export const Settings = () => {
 
   const handleDisconnectRazorpay = async () => {
     setFeedback({ type: '', message: '' });
-    if (!window.confirm('Are you sure you want to disconnect your Razorpay integration? Client online checkout payments will be disabled.')) {
+    const isConfirmed = await confirm({
+      title: 'Disconnect Razorpay',
+      message: 'Are you sure you want to disconnect your Razorpay integration? Client online checkout payments will be disabled.'
+    });
+    if (!isConfirmed) {
       return;
     }
     try {
@@ -216,6 +223,24 @@ export const Settings = () => {
     } catch (err) {
       setFeedback({ type: 'error', message: err.message || 'Failed to disconnect Razorpay.' });
     }
+  };
+
+  const dummyDoc = {
+    document_number: 'DOC-9999',
+    type: 'invoice',
+    created_at: new Date().toISOString(),
+    due_date: new Date(Date.now() + 14 * 86400000).toISOString(),
+    client_name: 'John Doe',
+    client_email: 'john@example.com',
+    billing_address: { street: '123 Fake St', city: 'Metropolis', zip: '12345' },
+    lines: [
+      { quantity: 1, description: 'Web Development Services', unit_price: 5000, amount: 5000 },
+      { quantity: 2, description: 'Consulting Hours', unit_price: 1500, amount: 3000 }
+    ],
+    sub_total: 8000,
+    tax_amount: 1440,
+    total_due: 9440,
+    status: 'draft'
   };
 
   if (loading) {
@@ -422,13 +447,13 @@ export const Settings = () => {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem' }}>
               <div className="form-group">
                 <label className="form-label">Website</label>
                 <input 
                   type="text" 
                   className="form-input" 
-                  value={settings.business_info.website}
+                  value={settings.business_info.website || ''}
                   onChange={(e) => updateSettingState('business_info', 'website', e.target.value)}
                 />
               </div>
@@ -438,8 +463,19 @@ export const Settings = () => {
                 <input 
                   type="email" 
                   className="form-input" 
-                  value={settings.business_info.email}
+                  value={settings.business_info.email || ''}
                   onChange={(e) => updateSettingState('business_info', 'email', e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Contact Phone</label>
+                <input 
+                  type="tel" 
+                  className="form-input" 
+                  placeholder="+91 9876543210"
+                  value={settings.business_info.phone || '+91 '}
+                  onChange={(e) => updateSettingState('business_info', 'phone', e.target.value)}
                 />
               </div>
             </div>
@@ -569,17 +605,35 @@ export const Settings = () => {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem' }}>
               <div className="form-group">
                 <label className="form-label">Template Design</label>
                 <select 
                   className="form-select"
-                  value={settings.invoice_config.quote.templateDesign}
+                  value={settings.invoice_config.quote.templateDesign || 'default'}
                   onChange={(e) => updateSubSettingState('invoice_config', 'quote', 'templateDesign', e.target.value)}
                 >
                   <option value="default">Default Glass-Theme</option>
                   <option value="simple">Minimal Grid Layout</option>
+                  <option value="modern">Modern Professional</option>
+                  <option value="bold">Bold Corporate</option>
+                  <option value="elegant">Elegant Serif</option>
                 </select>
+              </div>
+              
+              <div className="form-group">
+                <label className="form-label">Template Color</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input 
+                    type="color" 
+                    value={settings.invoice_config.quote.templateColor || '#234a75'}
+                    onChange={(e) => updateSubSettingState('invoice_config', 'quote', 'templateColor', e.target.value)}
+                    style={{ height: '38px', width: '50px', cursor: 'pointer', padding: '0', border: '1px solid var(--border-color)', borderRadius: '4px' }}
+                  />
+                  <span style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                    {settings.invoice_config.quote.templateColor || '#234a75'}
+                  </span>
+                </div>
               </div>
 
               <div className="form-group">
@@ -593,6 +647,31 @@ export const Settings = () => {
                   />
                   <span>Show "Accept Quote" button on customer portal</span>
                 </label>
+              </div>
+            </div>
+            
+            <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '2rem' }}>
+              <h4 style={{ marginBottom: '1rem' }}>Live Theme Preview</h4>
+              <div style={{ 
+                border: '1px solid var(--border-color)', 
+                borderRadius: '8px', 
+                overflowY: 'auto',
+                overflowX: 'hidden', 
+                height: '850px', 
+                backgroundColor: '#f1f5f9',
+                padding: '2rem 1rem'
+              }}>
+                <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}>
+                  <DocumentTemplate 
+                    doc={{ ...dummyDoc, type: 'quote', invoice_config: settings.invoice_config }}
+                    businessInfo={settings.business_info}
+                    previewTheme={settings.invoice_config.quote.templateDesign || 'default'}
+                    previewColor={settings.invoice_config.quote.templateColor || '#234a75'}
+                    currencySymbol={settings.tax_config.currencySymbol || '₹'}
+                    finalTotal={9440}
+                    originalTotal={9440}
+                  />
+                </div>
               </div>
             </div>
 
@@ -681,16 +760,61 @@ export const Settings = () => {
               />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Template Design</label>
-              <select 
-                className="form-select"
-                value={settings.invoice_config.invoice.templateDesign}
-                onChange={(e) => updateSubSettingState('invoice_config', 'invoice', 'templateDesign', e.target.value)}
-              >
-                <option value="default">Default Glass-Theme</option>
-                <option value="simple">Minimal Grid Layout</option>
-              </select>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+              <div className="form-group">
+                <label className="form-label">Template Design</label>
+                <select 
+                  className="form-select"
+                  value={settings.invoice_config.invoice.templateDesign || 'default'}
+                  onChange={(e) => updateSubSettingState('invoice_config', 'invoice', 'templateDesign', e.target.value)}
+                >
+                  <option value="default">Default Glass-Theme</option>
+                  <option value="simple">Minimal Grid Layout</option>
+                  <option value="modern">Modern Professional</option>
+                  <option value="bold">Bold Corporate</option>
+                  <option value="elegant">Elegant Serif</option>
+                </select>
+              </div>
+              
+              <div className="form-group">
+                <label className="form-label">Template Color</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input 
+                    type="color" 
+                    value={settings.invoice_config.invoice.templateColor || '#234a75'}
+                    onChange={(e) => updateSubSettingState('invoice_config', 'invoice', 'templateColor', e.target.value)}
+                    style={{ height: '38px', width: '50px', cursor: 'pointer', padding: '0', border: '1px solid var(--border-color)', borderRadius: '4px' }}
+                  />
+                  <span style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                    {settings.invoice_config.invoice.templateColor || '#234a75'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '2rem' }}>
+              <h4 style={{ marginBottom: '1rem' }}>Live Theme Preview</h4>
+              <div style={{ 
+                border: '1px solid var(--border-color)', 
+                borderRadius: '8px', 
+                overflowY: 'auto',
+                overflowX: 'hidden', 
+                height: '850px', 
+                backgroundColor: '#f1f5f9',
+                padding: '2rem 1rem'
+              }}>
+                <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}>
+                  <DocumentTemplate 
+                    doc={{ ...dummyDoc, type: 'invoice', invoice_config: settings.invoice_config }}
+                    businessInfo={settings.business_info}
+                    previewTheme={settings.invoice_config.invoice.templateDesign || 'default'}
+                    previewColor={settings.invoice_config.invoice.templateColor || '#234a75'}
+                    currencySymbol={settings.tax_config.currencySymbol || '₹'}
+                    finalTotal={9440}
+                    originalTotal={9440}
+                  />
+                </div>
+              </div>
             </div>
 
             <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>

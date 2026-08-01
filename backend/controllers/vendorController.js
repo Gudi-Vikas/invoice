@@ -1,6 +1,7 @@
 import { runInTransaction } from '../config/db.js';
 import razorpayService from '../services/razorpayService.js';
 import { postLedgerTransaction } from '../services/ledgerService.js';
+import { isValidEmail, isValidPhone, normalizeEmail } from '../utils/validation.js';
 
 /**
  * Controller managing Marketplace Vendor Onboarding and KYC workflows.
@@ -10,33 +11,44 @@ export const vendorController = {
    * 1. Onboards a new vendor and creates a Razorpay Route Linked Account.
    */
   createVendor: async (req, res, next) => {
-    const { businessName, email, platformFeePercentage } = req.body;
+    const { businessName, email, phone, platformFeePercentage } = req.body;
 
     if (!businessName || !email) {
       return res.status(400).json({ error: 'Vendor business name and email address are required.' });
     }
 
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Please enter a valid vendor email address.' });
+    }
+
+    if (phone && !isValidPhone(phone)) {
+      return res.status(400).json({ error: 'Please enter a valid vendor phone number.' });
+    }
+
+    const cleanEmail = normalizeEmail(email);
+    const cleanPhone = phone ? phone.trim() : null;
+
     try {
       const vendorResult = await runInTransaction(req.tenantId, async (client) => {
-        const existing = await client.query(
-          `SELECT id FROM vendors WHERE tenant_id = $1 AND email = $2`,
-          [req.tenantId, email]
-        );
-        if (existing.rows.length > 0) {
-          throw Object.assign(new Error('A vendor with this email already exists.'), { status: 409 });
+        let vendor;
+        try {
+          // A. Insert vendor locally
+          const insertRes = await client.query(
+            `INSERT INTO vendors (tenant_id, business_name, email, phone, platform_fee_percentage, kyc_status)
+             VALUES ($1, $2, $3, $4, $5, 'uninitiated')
+             RETURNING *`,
+            [req.tenantId, businessName, cleanEmail, cleanPhone, platformFeePercentage || 5.00]
+          );
+          vendor = insertRes.rows[0];
+        } catch (pgErr) {
+          if (pgErr.code === '23505') {
+            throw Object.assign(new Error('A vendor with this email already exists in this workspace.'), { statusCode: 409 });
+          }
+          throw pgErr;
         }
 
-        // A. Insert vendor locally
-        const insertRes = await client.query(
-          `INSERT INTO vendors (tenant_id, business_name, email, platform_fee_percentage, kyc_status)
-           VALUES ($1, $2, $3, $4, 'uninitiated')
-           RETURNING *`,
-          [req.tenantId, businessName, email, platformFeePercentage || 5.00]
-        );
-        const vendor = insertRes.rows[0];
-
         // B. Provision a Route Linked Account in Razorpay
-        const rzpAccount = await razorpayService.createLinkedAccount(businessName, email);
+        const rzpAccount = await razorpayService.createLinkedAccount(businessName, cleanEmail);
 
         // C. Record Linked Account mapping
         await client.query(
@@ -59,6 +71,9 @@ export const vendorController = {
         data: vendorResult
       });
     } catch (err) {
+      if (err.statusCode) {
+        return res.status(err.statusCode).json({ error: err.message });
+      }
       next(err);
     }
   },

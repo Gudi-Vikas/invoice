@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Layers, LogIn, UserPlus, ArrowRight } from 'lucide-react';
+import { Layers, LogIn, UserPlus, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import ThemeToggle from '../ThemeToggle';
+import { isValidEmail, isValidPhone } from '../../utils/validation';
 
 /**
  * LoginPage — Full-screen glassmorphism login/signup page.
@@ -17,10 +18,11 @@ export const LoginPage = () => {
 
   const [mode, setMode] = useState('login'); // 'login' | 'signup'
   const [formData, setFormData] = useState({
-    email: '', password: '', name: '', domain: ''
+    email: '', password: '', name: '', domain: '', phone: '+91 '
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -30,6 +32,12 @@ export const LoginPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (!isValidEmail(formData.email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -42,7 +50,12 @@ export const LoginPage = () => {
           setSubmitting(false);
           return;
         }
-        await signup(formData.name, formData.domain, formData.email, formData.password);
+        if (formData.phone && !isValidPhone(formData.phone)) {
+          setError('Please enter a valid contact phone number (e.g. +91 9876543210).');
+          setSubmitting(false);
+          return;
+        }
+        await signup(formData.name, formData.domain, formData.email, formData.password, formData.phone);
         showToast('Account created! Welcome aboard.', 'success');
       }
       navigate('/dashboard');
@@ -170,6 +183,18 @@ export const LoginPage = () => {
                   autoComplete="url"
                 />
               </div>
+              <div className="form-group">
+                <label className="form-label">Contact Phone Number (optional)</label>
+                <input
+                  type="tel"
+                  name="phone"
+                  className="form-input"
+                  placeholder="+91 9876543210"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  autoComplete="tel"
+                />
+              </div>
             </>
           )}
 
@@ -187,10 +212,10 @@ export const LoginPage = () => {
             />
           </div>
 
-          <div className="form-group">
+          <div className="form-group" style={{ position: 'relative' }}>
             <label className="form-label">Password *</label>
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               name="password"
               className="form-input"
               placeholder="••••••••"
@@ -199,7 +224,24 @@ export const LoginPage = () => {
               required
               minLength={8}
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              style={{ paddingRight: '2.5rem' }}
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: 'absolute',
+                right: '0.75rem',
+                top: '2.2rem',
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                padding: '0'
+              }}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
 
           <button
@@ -239,19 +281,7 @@ export const LoginPage = () => {
           </button>
         </div>
 
-        <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-          <button
-            type="button"
-            onClick={() => navigate('/master/login')}
-            style={{
-              background: 'none', border: 'none',
-              color: 'var(--text-muted)', cursor: 'pointer',
-              fontSize: '0.75rem', fontFamily: 'var(--font-body)'
-            }}
-          >
-            Platform Admin Login →
-          </button>
-        </div>
+
       </div>
     </div>
   );

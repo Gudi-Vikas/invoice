@@ -6,6 +6,7 @@ import {
   CreditCard, Plus, Edit3, Archive, RotateCcw, Check,
   X, Infinity, Users, FileText, Crown, RefreshCw, Zap
 } from 'lucide-react';
+import ModalPortal from '../ModalPortal';
 
 const FEATURE_KEYS = [
   { key: 'max_clients',            label: 'Clients',                icon: Users },
@@ -349,12 +350,13 @@ export const MasterPlans = () => {
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div
-            className="plan-card modal-card"
-            style={{ '--modal-width': '620px', padding: '2rem', maxHeight: '90vh', overflowY: 'auto' }}
-            onClick={(e) => e.stopPropagation()}
-          >
+        <ModalPortal>
+          <div className="modal-overlay" onClick={() => setShowModal(false)}>
+            <div
+              className="plan-card modal-card"
+              style={{ '--modal-width': '620px', padding: '2rem', maxHeight: '90vh', overflowY: 'auto' }}
+              onClick={(e) => e.stopPropagation()}
+            >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem' }}>
               <h2 style={{ fontSize: '1.35rem', fontWeight: 700 }}>
                 {editing ? `Edit Plan — ${editing.name}` : 'Create New Plan'}
@@ -550,6 +552,7 @@ export const MasterPlans = () => {
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

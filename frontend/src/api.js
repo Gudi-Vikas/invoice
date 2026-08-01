@@ -21,14 +21,7 @@ const request = async (url, options = {}) => {
     try { return JSON.parse(localStorage.getItem('invoice_saas_active_tenant')); } catch { return null; }
   })();
 
-  // Check cache for GET requests
-  const cacheKey = `${activeTenant?.id || 'global'}:${url}`;
-  if (method === 'GET') {
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      return cached.data;
-    }
-  }
+  // Cache removed for realtime dashboard data freshness
 
   const isFormData = options.body instanceof FormData;
   const headers = {
@@ -58,14 +51,6 @@ const request = async (url, options = {}) => {
   }
 
   const data = await res.json();
-
-  // Cache successful GET responses
-  if (method === 'GET') {
-    cache.set(cacheKey, { data, timestamp: Date.now() });
-  } else {
-    // Invalidate cache on mutations (POST, PUT, PATCH, DELETE) to ensure freshness
-    cache.clear();
-  }
 
   return data;
 };
@@ -112,8 +97,8 @@ export const api = {
   getDocument: (id) => request(`/documents/${id}`),
   createDocument: (data) =>
     request('/documents', { method: 'POST', body: JSON.stringify(data) }),
-  updateDocumentStatus: (id, status) =>
-    request(`/documents/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
+  updateDocumentStatus: (id, status, utr = null) =>
+    request(`/documents/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, utr }) }),
   convertQuoteToInvoice: (id) =>
     request(`/documents/${id}/convert`, { method: 'POST' }),
   deleteDocument: (id) =>
@@ -172,56 +157,7 @@ export const api = {
   verifyPlatformInvoicePayment: (data) =>
     request('/subscriptions/verify-invoice', { method: 'POST', body: JSON.stringify(data) }),
 
-  // ── Master Admin ───────────────────────────────────────────────────────
-  masterDashboard: () => request('/master/dashboard'),
-  masterListTenants: (params = {}) => {
-    const qs = new URLSearchParams(params).toString();
-    return request(`/master/tenants${qs ? '?' + qs : ''}`);
-  },
-  masterGetTenant: (id) => request(`/master/tenants/${id}`),
-  masterDisableTenant: (id, reason) =>
-    request(`/master/tenants/${id}/disable`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
-  masterEnableTenant: (id) =>
-    request(`/master/tenants/${id}/enable`, { method: 'PATCH', body: JSON.stringify({}) }),
-  masterOverrideSub: (id, data) =>
-    request(`/master/tenants/${id}/subscription`, { method: 'PATCH', body: JSON.stringify(data) }),
-  masterDeleteTenant: (id) =>
-    request(`/master/tenants/${id}`, { method: 'DELETE', body: JSON.stringify({ confirm: true }) }),
-  masterListAdmins: () => request('/master/admins'),
-  masterToggleAdmin: (id) =>
-    request(`/master/admins/${id}/toggle`, { method: 'PATCH', body: JSON.stringify({}) }),
-  masterCreateAdmin: (data) =>
-    request('/master/admins', { method: 'POST', body: JSON.stringify(data) }),
-  masterUpdateAdminPermissions: (id, permissions) =>
-    request(`/master/admins/${id}/permissions`, { method: 'PATCH', body: JSON.stringify({ permissions }) }),
-  masterGenerateBilling: (data) =>
-    request('/master/billing/generate', { method: 'POST', body: JSON.stringify(data) }),
-  masterListBilling: (params = {}) => {
-    const qs = new URLSearchParams(params).toString();
-    return request(`/master/billing${qs ? '?' + qs : ''}`);
-  },
-  masterGetBilling: (id) => request(`/master/billing/${id}`),
-  masterMarkPaid: (id, data) =>
-    request(`/master/billing/${id}/mark-paid`, { method: 'PATCH', body: JSON.stringify(data || {}) }),
-  masterVoidInvoice: (id, reason) =>
-    request(`/master/billing/${id}/void`, { method: 'PATCH', body: JSON.stringify({ reason }) }),
-  masterMarkOverdue: () =>
-    request('/master/billing/mark-overdue', { method: 'POST', body: JSON.stringify({}) }),
-  masterTenantBilling: (tenantId) => request(`/master/billing/tenant/${tenantId}`),
 
-  // ── Master Plan Management ─────────────────────────────────────────────
-  masterListPlans: (params = {}) => {
-    const qs = new URLSearchParams(params).toString();
-    return request(`/master/plans${qs ? '?' + qs : ''}`);
-  },
-  masterCreatePlan: (data) =>
-    request('/master/plans', { method: 'POST', body: JSON.stringify(data) }),
-  masterUpdatePlan: (id, data) =>
-    request(`/master/plans/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  masterArchivePlan: (id) =>
-    request(`/master/plans/${id}/archive`, { method: 'PATCH', body: JSON.stringify({}) }),
-  masterRestorePlan: (id) =>
-    request(`/master/plans/${id}/restore`, { method: 'PATCH', body: JSON.stringify({}) }),
 
   // ── Auth (used by AuthContext, exposed here for completeness) ──────────
   invite: (data, tenantId = null) => {
@@ -236,7 +172,7 @@ export const api = {
 
   // ── Notification Badges & Feed ──────────────────────────────────────────────
   getNotificationCounts: () => request('/documents/notifications'),
-  getMasterNotifications: () => request('/master/notifications'),
+
   getNotifications: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/notifications${qs ? '?' + qs : ''}`);

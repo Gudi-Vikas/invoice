@@ -6,6 +6,7 @@ import {
   Receipt, Plus, DollarSign, XCircle, CheckCircle, Eye, ArrowLeft
 } from 'lucide-react';
 import PlatformInvoiceVisualizer from '../shared/PlatformInvoiceVisualizer';
+import ModalPortal from '../ModalPortal';
 
 /**
  * MasterBilling — Platform billing invoice management.
@@ -347,65 +348,69 @@ export const MasterBilling = () => {
 
       {/* ----------------- MODALS ----------------- */}
       {showMarkPaidModal && (
-        <div className="modal-overlay">
-          <div className="billing-card modal-card" style={{ '--modal-width': '480px' }}>
-            <h3 style={{ marginBottom: '1rem', color: 'var(--accent-success)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <CheckCircle size={20} /> Mark Invoice as Paid
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-              Are you sure you want to mark invoice <strong>{showMarkPaidModal.invoice_number}</strong> for <strong>{showMarkPaidModal.tenant_name}</strong> as paid?
-            </p>
-            <form onSubmit={confirmMarkPaid}>
-              <div className="form-group">
-                <label className="form-label">Payment Reference / Razorpay ID (Optional)</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  placeholder="e.g. pay_XXXXX or Bank Ref"
-                  value={markPaidRef} 
-                  onChange={e => setMarkPaidRef(e.target.value)} 
-                />
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => { setShowMarkPaidModal(null); setMarkPaidRef(''); }}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={actionInProgress === showMarkPaidModal.id} style={{ backgroundColor: 'var(--accent-success)', borderColor: 'var(--accent-success)' }}>
-                  {actionInProgress === showMarkPaidModal.id ? 'Saving...' : 'Confirm Paid'}
-                </button>
-              </div>
-            </form>
+        <ModalPortal>
+          <div className="modal-overlay">
+            <div className="billing-card modal-card" style={{ '--modal-width': '480px' }}>
+              <h3 style={{ marginBottom: '1rem', color: 'var(--accent-success)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <CheckCircle size={20} /> Mark Invoice as Paid
+              </h3>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+                Are you sure you want to mark invoice <strong>{showMarkPaidModal.invoice_number}</strong> for <strong>{showMarkPaidModal.tenant_name}</strong> as paid?
+              </p>
+              <form onSubmit={confirmMarkPaid}>
+                <div className="form-group">
+                  <label className="form-label">Payment Reference / Razorpay ID (Optional)</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    placeholder="e.g. pay_XXXXX or Bank Ref"
+                    value={markPaidRef} 
+                    onChange={e => setMarkPaidRef(e.target.value)} 
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => { setShowMarkPaidModal(null); setMarkPaidRef(''); }}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={actionInProgress === showMarkPaidModal.id} style={{ backgroundColor: 'var(--accent-success)', borderColor: 'var(--accent-success)' }}>
+                    {actionInProgress === showMarkPaidModal.id ? 'Saving...' : 'Confirm Paid'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {showVoidModal && (
-        <div className="modal-overlay">
-          <div className="billing-card modal-card" style={{ '--modal-width': '480px' }}>
-            <h3 style={{ marginBottom: '1rem', color: 'var(--accent-danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <XCircle size={20} /> Void Invoice
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-              Voiding invoice <strong>{showVoidModal.invoice_number}</strong> will cancel it permanently.
-            </p>
-            <form onSubmit={confirmVoid}>
-              <div className="form-group">
-                <label className="form-label">Reason for Voiding (Optional)</label>
-                <textarea 
-                  className="form-textarea" 
-                  placeholder="Explain why this invoice is being voided..."
-                  rows={2}
-                  value={voidReason} 
-                  onChange={e => setVoidReason(e.target.value)} 
-                />
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => { setShowVoidModal(null); setVoidReason(''); }}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={actionInProgress === showVoidModal.id} style={{ backgroundColor: 'var(--accent-danger)', borderColor: 'var(--accent-danger)' }}>
-                  {actionInProgress === showVoidModal.id ? 'Voiding...' : 'Confirm Void'}
-                </button>
-              </div>
-            </form>
+        <ModalPortal>
+          <div className="modal-overlay">
+            <div className="billing-card modal-card" style={{ '--modal-width': '480px' }}>
+              <h3 style={{ marginBottom: '1rem', color: 'var(--accent-danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <XCircle size={20} /> Void Invoice
+              </h3>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+                Voiding invoice <strong>{showVoidModal.invoice_number}</strong> will cancel it permanently.
+              </p>
+              <form onSubmit={confirmVoid}>
+                <div className="form-group">
+                  <label className="form-label">Reason for Voiding (Optional)</label>
+                  <textarea 
+                    className="form-textarea" 
+                    placeholder="Explain why this invoice is being voided..."
+                    rows={2}
+                    value={voidReason} 
+                    onChange={e => setVoidReason(e.target.value)} 
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => { setShowVoidModal(null); setVoidReason(''); }}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={actionInProgress === showVoidModal.id} style={{ backgroundColor: 'var(--accent-danger)', borderColor: 'var(--accent-danger)' }}>
+                    {actionInProgress === showVoidModal.id ? 'Voiding...' : 'Confirm Void'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

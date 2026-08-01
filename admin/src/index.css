@@ -1,0 +1,1343 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Sidebar width (updated dynamically via JS) */
+  --sidebar-width: 260px;
+
+  /* Color Palette (HSL Tailored) */
+  --bg-primary: hsl(230, 16%, 7%);
+  --bg-secondary: hsl(230, 16%, 10%);
+  --bg-card: rgba(22, 25, 37, 0.7);
+  --bg-input: rgba(255, 255, 255, 0.05); /* Increased from 0.03 for visibility */
+  --bg-active: rgba(255, 255, 255, 0.1); /* Increased from 0.08 for visibility */
+
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-glow: rgba(59, 130, 246, 0.3);
+
+  --text-primary: hsl(210, 40%, 98%);
+  --text-secondary: hsl(215, 20%, 75%);
+  --text-muted: hsl(215, 12%, 65%); /* Changed from 55% to 65% for dark mode contrast */
+
+  --accent-primary: hsl(217, 91%, 60%);    /* Neon Electric Blue */
+  --accent-secondary: hsl(262, 83%, 58%);  /* Violet Glow */
+  --accent-success: hsl(142, 72%, 45%);    /* Emerald Green */
+  --accent-warning: hsl(37, 90%, 50%);     /* Amber Gold */
+  --accent-danger: hsl(350, 89%, 60%);     /* Ruby Red */
+
+  /* Shadows and Blurs */
+  --card-blur: 16px;
+  --box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --glow-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+
+  /* Fonts */
+  --font-display: 'Outfit', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+[data-theme="light"] {
+  --bg-primary: hsl(220, 24%, 96%);
+  --bg-secondary: hsl(220, 20%, 90%);
+  --bg-card: rgba(255, 255, 255, 0.85); /* Increased opacity for card */
+  --bg-input: rgba(0, 0, 0, 0.05);
+  --bg-active: rgba(0, 0, 0, 0.08);
+
+  --border-color: rgba(0, 0, 0, 0.12); /* Increased border contrast */
+  --border-glow: rgba(59, 130, 246, 0.2);
+
+  --text-primary: hsl(220, 35%, 15%);
+  --text-secondary: hsl(220, 16%, 25%); /* Darkened from 36% for readability */
+  --text-muted: hsl(220, 10%, 45%); /* Darkened from 55% for readability */
+
+  --accent-primary: hsl(221, 83%, 45%); /* Slightly darker for white bg */
+  --accent-secondary: hsl(262, 70%, 45%);
+  --accent-success: hsl(142, 69%, 30%); /* Darker green */
+  --accent-warning: hsl(37, 85%, 35%); /* Darker amber for contrast */
+  --accent-danger: hsl(350, 80%, 45%); /* Darker red */
+
+  --box-shadow: 0 8px 32px 0 rgba(31, 41, 55, 0.06);
+  --glow-shadow: 0 0 12px rgba(59, 130, 246, 0.15);
+}
+
+/* ── Light Theme Visual Tweaks ─────────────────────────── */
+[data-theme="light"] .app-container {
+  background: radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.04) 0%, rgba(255, 255, 255, 0) 90%);
+}
+
+
+[data-theme="light"] .data-table tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="light"] .parsed-card {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="light"] .skeleton-block {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.04) 25%,
+    rgba(0, 0, 0, 0.08) 50%,
+    rgba(0, 0, 0, 0.04) 75%
+  );
+}
+
+/* Ensure alerts are legible in light mode, overriding hardcoded colors */
+[data-theme="light"] .info-alert-text {
+  color: hsl(217, 91%, 25%) !important;
+}
+
+[data-theme="light"] .info-alert-text[style*="hsl(142"] {
+  color: hsl(142, 72%, 25%) !important;
+}
+
+[data-theme="light"] .info-alert-text[style*="hsl(350"] {
+  color: hsl(350, 89%, 30%) !important;
+}
+
+/* Light Mode Status Badges */
+[data-theme="light"] .badge-draft {
+  background-color: rgba(0, 0, 0, 0.06);
+  color: hsl(220, 20%, 32%);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .badge-published {
+  background-color: rgba(59, 130, 246, 0.12);
+  color: hsl(217, 90%, 35%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+[data-theme="light"] .badge-paid {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: hsl(142, 75%, 28%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+[data-theme="light"] .badge-accepted {
+  background-color: rgba(139, 92, 246, 0.12);
+  color: hsl(262, 75%, 38%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+[data-theme="light"] .badge-overdue {
+  background-color: rgba(239, 68, 68, 0.12);
+  color: hsl(350, 85%, 38%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+[data-theme="light"] .badge-sent {
+  background-color: rgba(59, 130, 246, 0.12);
+  color: hsl(217, 90%, 35%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+[data-theme="light"] .badge-rejected {
+  background-color: rgba(239, 68, 68, 0.12);
+  color: hsl(350, 85%, 38%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+[data-theme="light"] .badge-voided {
+  background-color: rgba(107, 114, 128, 0.12);
+  color: hsl(215, 16%, 35%);
+  border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
+/* Light Mode Invoice Border adjustments to prevent blending */
+[data-theme="light"] .invoice-container {
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Reset and Global Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* App Container Layout */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  background: radial-gradient(circle at 10% 20%, rgba(26, 30, 54, 0.3) 0%, rgba(10, 11, 16, 0) 90%);
+}
+
+
+
+/* Sidebar Custom Styling */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 260px;
+  height: 100vh;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+/* Collapsed sidebar state */
+.sidebar.collapsed {
+  width: 68px;
+  padding: 2rem 0.75rem;
+}
+
+/* Hide text labels in collapsed mode */
+.sidebar.collapsed .sidebar-label,
+.sidebar.collapsed .sidebar-brand-text,
+.sidebar.collapsed .sidebar-user-info,
+.sidebar.collapsed .sidebar-switcher {
+  display: none;
+}
+
+/* Collapsed nav button alignment */
+.sidebar.collapsed .sidebar-nav-btn {
+  justify-content: center;
+  padding: 0.8rem;
+}
+
+/* Main content margin responds to sidebar collapse */
+.main-content {
+  flex: 1;
+  padding: 2.5rem;
+  margin-left: 260px;
+  min-height: 100vh;
+  overflow-y: auto;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.main-content.sidebar-collapsed {
+  margin-left: 68px;
+}
+
+/* ── Sidebar Nav Item Wrapper — positions badge relative to btn ── */
+.sidebar-nav-item {
+  position: relative;
+  width: 100%;
+}
+
+/* ── Notification Badge Circle ───────────────────────────────── */
+.sidebar-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  line-height: 1;
+  letter-spacing: 0;
+  flex-shrink: 0;
+  margin-left: auto;
+  border: 1.5px solid var(--bg-secondary);
+}
+
+.sidebar-badge.danger {
+  background-color: var(--accent-danger);
+  color: #fff;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  animation: badge-pulse-red 2s ease-in-out infinite;
+}
+
+.sidebar-badge.warning {
+  background-color: var(--accent-warning);
+  color: #fff;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+}
+
+.sidebar-badge.info {
+  background-color: var(--accent-primary);
+  color: #fff;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+}
+
+.sidebar-badge.success {
+  background-color: var(--accent-success);
+  color: #fff;
+}
+
+/* Collapsed: badge appears as small absolute dot */
+.sidebar.collapsed .sidebar-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 8px;
+  height: 8px;
+  padding: 0;
+  font-size: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--bg-secondary);
+}
+
+/* ── Subscription Expiry Pill ────────────────────────────────── */
+.sub-expiry-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.1rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.sub-expiry-pill.critical {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--accent-danger);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  animation: badge-pulse-red 1.5s ease-in-out infinite;
+}
+
+.sub-expiry-pill.warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent-warning);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.sub-expiry-pill.notice {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--accent-primary);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* Hide pill text in collapsed mode — show dot only */
+.sidebar.collapsed .sub-expiry-pill {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 0;
+  width: 8px;
+  height: 8px;
+  font-size: 0;
+  border-radius: 50%;
+  border-width: 1.5px;
+  margin-left: 0;
+}
+
+/* ── Sidebar collapse toggle button ─────────────────────────── */
+.sidebar-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.55rem;
+  margin-top: 0.75rem;
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.75rem;
+  gap: 0.4rem;
+}
+
+.sidebar-toggle-btn:hover {
+  background: var(--bg-active);
+  color: var(--text-secondary);
+}
+
+@keyframes badge-pulse-red {
+  0%, 100% { box-shadow: 0 0 6px rgba(239, 68, 68, 0.4); }
+  50%       { box-shadow: 0 0 14px rgba(239, 68, 68, 0.8); }
+}
+
+
+/* Glassmorphism Card Panels */
+.glass-card, .admin-card, .plan-card, .billing-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(var(--card-blur));
+  -webkit-backdrop-filter: blur(var(--card-blur));
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: var(--box-shadow);
+}
+.admin-card{
+  /* margin-top: auto;  */
+}
+.glass-card:hover, .admin-card:hover, .plan-card:hover, .billing-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Dedicated Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: var(--sidebar-width, 260px);
+  right: 0;
+  width: auto;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 0;
+  margin: 0;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-card {
+  width: min(100%, var(--modal-width, 520px));
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+@media (max-width: 720px) {
+  .modal-overlay {
+    left: 0;
+    right: 0;
+  }
+
+  .modal-card {
+    padding: 1.25rem;
+    max-height: 90vh;
+  }
+}
+
+/* Form inputs & Typography fields */
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.01em;
+}
+
+.form-input, .form-textarea, .form-select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.form-input:focus, .form-textarea:focus, .form-select:focus {
+  border-color: var(--accent-primary);
+  box-shadow: var(--border-glow);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.form-textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.form-select option {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* Settings Tabs Design */
+.settings-tabs-header {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+  margin-bottom: 2rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.settings-tab-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settings-tab-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-active);
+}
+
+.settings-tab-btn.active {
+  color: var(--text-primary);
+  background-color: var(--accent-primary);
+  box-shadow: var(--glow-shadow);
+}
+
+/* Dynamic Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+}
+
+.btn-primary {
+  background-color: var(--accent-primary);
+  color: #fff;
+  box-shadow: var(--glow-shadow);
+}
+
+.btn-primary:hover {
+  background-color: hsl(217, 91%, 65%);
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background-color: var(--bg-active);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
+}
+
+.btn-danger {
+  background-color: var(--accent-danger);
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background-color: hsl(350, 89%, 65%);
+  transform: translateY(-2px);
+}
+
+/* Data Tables */
+.table-container {
+  overflow-x: auto;
+  margin-top: 1.5rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.data-table th {
+  padding: 1rem 1.25rem;
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.data-table td {
+  padding: 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.925rem;
+}
+
+.data-table tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.data-table tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* Badges for status labels */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.badge-draft {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.badge-published {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: hsl(217, 91%, 75%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.badge-paid {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: hsl(142, 72%, 70%);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-accepted {
+  background-color: rgba(139, 92, 246, 0.15);
+  color: hsl(262, 83%, 75%);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.badge-overdue {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: hsl(350, 89%, 75%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Pre-defined line item parsing grid cards */
+.parsed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.parsed-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  padding: 1rem;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.parsed-card h4 {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.parsed-card p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.parsed-card .price {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  font-family: var(--font-display);
+}
+
+/* Tooltips & Info messages */
+.info-alert {
+  background-color: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  padding: 1rem;
+  border-radius: 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.info-alert-text {
+  font-size: 0.85rem;
+  color: hsl(217, 91%, 85%);
+  line-height: 1.4;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Responsive Grid layouts */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.metric-card {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.metric-icon-wrap {
+  width: 54px;
+  height: 54px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-active);
+  border: 1px solid var(--border-color);
+  color: var(--accent-primary);
+}
+
+.metric-details h4 {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+.metric-details p {
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  color: var(--text-primary);
+}
+
+/* ── Missing Badge Variants ─────────────────────────────── */
+.badge-sent {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: var(--accent-info);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.badge-rejected {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--accent-danger);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.badge-voided {
+  background-color: rgba(107, 114, 128, 0.15);
+  color: hsl(215, 12%, 65%);
+  border: 1px solid rgba(107, 114, 128, 0.3);
+  text-decoration: line-through;
+}
+
+/* ── Clients Page Grid ──────────────────────────────────── */
+.clients-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1.25rem;
+}
+
+/* ── Metric card hover enhancement ─────────────────────── */
+.metric-card:hover {
+  transform: translateY(-2px);
+}
+
+/* ── Table container scroll wrapper ────────────────────── */
+.table-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── @media print — Clean PDF invoice layout ───────────── */
+/* Activated by window.print() button in Documents detail view */
+@media print {
+  /* Reset background and colors for standard print */
+  html, body {
+    background: #ffffff !important;
+    color: #111111 !important;
+    font-family: 'Inter', Arial, sans-serif !important;
+  }
+
+  /* Hide navigation, buttons, and layout wrappers */
+  .sidebar,
+  .btn,
+  .settings-tabs-header,
+  header,
+  nav,
+  button,
+  .app-container > .sidebar,
+  div[class*="ActionSidebar"] {
+    display: none !important;
+  }
+
+  /* Reset layout structure to prevent offsets */
+  .app-container {
+    display: block !important;
+    background: #ffffff !important;
+  }
+
+  .main-content {
+    margin-left: 0 !important;
+    padding: 0 !important;
+    min-height: auto !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+  }
+
+  /* Format print area for proper print layout */
+  #print-area {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    color: #1e293b !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #print-area.invoice-container {
+    border: 5px solid #234a75 !important;
+    padding: 2.5rem !important;
+    border-radius: 4px !important;
+  }
+
+  /* Force table cells to render clean white backgrounds */
+  #print-area table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  #print-area table th,
+  #print-area table td {
+    background: #ffffff !important;
+    color: #111111 !important;
+    border-bottom: 1px solid #eaeaea !important;
+  }
+
+  /* Preserve corporate invoice styles on print */
+  #print-area table.invoice-table th {
+    background-color: #234a75 !important;
+    color: #ffffff !important;
+  }
+
+  #print-area table.invoice-table td {
+    background-color: #ffffff !important;
+    color: #1e293b !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+  }
+
+  #print-area .invoice-address-header {
+    background-color: #234a75 !important;
+    color: #ffffff !important;
+  }
+
+  #print-area .invoice-address-body {
+    background-color: #355a82 !important;
+    color: #ffffff !important;
+  }
+
+  /* Remove glassmorphism styling on print cards */
+  #print-area .glass-card {
+    background: transparent !important;
+    border: none !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Standard page layout size */
+  @page {
+    size: A4;
+    margin: 1cm;
+  }
+}
+
+/* ── Auth Page Layout ──────────────────────────────────── */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-card {
+  width: 460px;
+  max-width: 95vw;
+  padding: 2.5rem;
+  position: relative;
+  z-index: 2;
+}
+
+.auth-bg-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.auth-bg-orb-1 {
+  width: 500px;
+  height: 500px;
+  top: -150px;
+  left: -100px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.12) 0%, transparent 70%);
+}
+
+.auth-bg-orb-2 {
+  width: 400px;
+  height: 400px;
+  bottom: -100px;
+  right: -80px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.1) 0%, transparent 70%);
+}
+
+/* ── Toast Slide-In Animation ──────────────────────────── */
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ── Error Shake Animation ─────────────────────────────── */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+/* ── Skeleton Loading Blocks ───────────────────────────── */
+.skeleton-block {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Spinner for loading states ────────────────────────── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── Vendors Page Grid & Card overrides ─────────────────── */
+.vendors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1.5rem;
+}
+
+.vendor-card {
+  padding: 1.5rem !important;
+}
+
+/* ── Corporate Premium Invoice Template ─────────────────── */
+.invoice-container {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  padding: 3rem !important;
+  border: 5px solid #234a75 !important;
+  border-radius: 4px !important;
+  max-width: 850px !important;
+  margin: 0 auto !important;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15) !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+}
+
+/* Header style */
+.invoice-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  margin-bottom: 2rem !important;
+}
+
+.invoice-logo-container {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.invoice-logo {
+  max-height: 50px !important;
+  margin-bottom: 0.5rem !important;
+  display: block !important;
+}
+
+.invoice-logo-fallback {
+  font-size: 1.5rem !important;
+  font-weight: 800 !important;
+  color: #234a75 !important;
+  text-transform: uppercase !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.invoice-title-banner {
+  background-color: #234a75 !important;
+  color: #ffffff !important;
+  padding: 0.5rem 2rem !important;
+  font-weight: 800 !important;
+  font-size: 1.25rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  border-radius: 2px !important;
+  min-width: 180px !important;
+  text-align: center !important;
+}
+
+/* Mid section grid layout */
+.invoice-mid-section {
+  display: grid !important;
+  grid-template-columns: 1.2fr 1fr !important;
+  gap: 2rem !important;
+  margin-bottom: 2.5rem !important;
+}
+
+.invoice-left-col {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1.25rem !important;
+}
+
+.invoice-right-col {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  text-align: right !important;
+}
+
+/* Address Block */
+.invoice-address-block {
+  border: 1px solid #234a75 !important;
+  border-radius: 4px !important;
+  overflow: hidden !important;
+}
+
+.invoice-address-header {
+  background-color: #234a75 !important;
+  color: #ffffff !important;
+  padding: 0.4rem 0.8rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+}
+
+.invoice-address-body {
+  background-color: #355a82 !important;
+  color: #ffffff !important;
+  padding: 0.75rem 0.8rem !important;
+  font-size: 0.85rem !important;
+  line-height: 1.4 !important;
+}
+
+.invoice-address-body p {
+  margin: 0 0 0.25rem 0 !important;
+}
+
+.invoice-address-body p:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Meta list and banner on the right side */
+.invoice-meta-list {
+  display: grid !important;
+  grid-template-columns: auto auto !important;
+  gap: 0.5rem 1.5rem !important;
+  text-align: left !important;
+  font-size: 0.9rem !important;
+  color: #1e293b !important;
+  margin-bottom: 1.5rem !important;
+}
+
+.invoice-meta-list b {
+  color: #1e293b !important;
+}
+
+.invoice-total-due-banner {
+  background-color: #234a75 !important;
+  color: #ffffff !important;
+  width: 100% !important;
+  padding: 0.6rem 1rem !important;
+  font-weight: 800 !important;
+  font-size: 1.15rem !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  box-sizing: border-box !important;
+  border-radius: 2px !important;
+  margin-bottom: 1.25rem !important;
+}
+
+.invoice-payment-terms {
+  font-size: 0.8rem !important;
+  color: #475569 !important;
+  line-height: 1.4 !important;
+  text-align: left !important;
+  max-width: 320px !important;
+  margin-bottom: 1.25rem !important;
+}
+
+.invoice-payment-methods {
+  text-align: left !important;
+  font-size: 0.85rem !important;
+  color: #1e293b !important;
+  align-self: flex-start !important;
+}
+
+.invoice-payment-methods h4 {
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  color: #234a75 !important;
+  margin: 0 0 0.4rem 0 !important;
+  text-transform: uppercase !important;
+}
+
+.invoice-payment-methods ol {
+  margin: 0 !important;
+  padding-left: 1.2rem !important;
+}
+
+.invoice-payment-methods li {
+  margin-bottom: 0.25rem !important;
+}
+
+/* Line items table style */
+.invoice-table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  margin-bottom: 2.5rem !important;
+}
+
+.invoice-table th {
+  background-color: #234a75 !important;
+  color: #ffffff !important;
+  padding: 0.75rem 1rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  border: none !important;
+}
+
+.invoice-table td {
+  padding: 1rem !important;
+  font-size: 0.9rem !important;
+  color: #1e293b !important;
+  border-bottom: 1px solid #cbd5e1 !important;
+  background-color: #ffffff !important;
+}
+
+.invoice-table tr:last-child td {
+  border-bottom: 2px solid #234a75 !important;
+}
+
+.invoice-item-desc {
+  font-weight: 600 !important;
+  color: #1e293b !important;
+  display: block !important;
+  margin-bottom: 0.2rem !important;
+}
+
+.invoice-item-subdesc {
+  font-size: 0.75rem !important;
+  color: #64748b !important;
+  display: block !important;
+}
+
+/* Bottom section: Bank details and totals grid */
+.invoice-bottom-section {
+  display: grid !important;
+  grid-template-columns: 1.2fr 1fr !important;
+  gap: 2rem !important;
+  align-items: start !important;
+  margin-bottom: 2rem !important;
+}
+
+.invoice-bank-details-box {
+  background-color: #f1f5f9 !important;
+  border-radius: 6px !important;
+  padding: 1.25rem !important;
+  font-size: 0.85rem !important;
+  color: #1e293b !important;
+  line-height: 1.5 !important;
+}
+
+.invoice-bank-details-box h4 {
+  font-size: 0.85rem !important;
+  font-weight: 800 !important;
+  color: #234a75 !important;
+  margin: 0 0 0.75rem 0 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.02em !important;
+}
+
+.invoice-bank-option {
+  margin-bottom: 1rem !important;
+}
+
+.invoice-bank-option:last-child {
+  margin-bottom: 0 !important;
+}
+
+.invoice-bank-option-title {
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.invoice-bank-details-grid {
+  display: grid !important;
+  grid-template-columns: 120px 1fr !important;
+  gap: 0.2rem 0.5rem !important;
+}
+
+.invoice-totals-box {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.6rem !important;
+  font-size: 0.9rem !important;
+  color: #1e293b !important;
+}
+
+.invoice-totals-row {
+  display: flex !important;
+  justify-content: space-between !important;
+  padding: 0.25rem 0.5rem !important;
+}
+
+.invoice-totals-row.discount {
+  color: #16a34a !important; /* Premium green */
+  font-weight: 600 !important;
+}
+
+.invoice-totals-row.bold-divider {
+  border-top: 1px solid #cbd5e1 !important;
+  padding-top: 0.6rem !important;
+}
+
+.invoice-totals-due-banner {
+  background-color: #234a75 !important;
+  color: #ffffff !important;
+  padding: 0.6rem 1rem !important;
+  font-weight: 800 !important;
+  font-size: 1.15rem !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  border-radius: 2px !important;
+  margin-top: 0.5rem !important;
+}
+
+/* Footer style */
+.invoice-footer-line {
+  border-top: 1.5px solid #234a75 !important;
+  margin-top: 3rem !important;
+  padding-top: 1.25rem !important;
+  text-align: center !important;
+  font-size: 0.8rem !important;
+  color: #475569 !important;
+  font-weight: 500 !important;
+}
+
+
+/* ── Floating Notification Button ────────────────────────────── */
+.floating-notification-btn {
+  position: fixed;
+  top: 1.5rem;
+  right: 2.5rem;
+  z-index: 1040;
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  background-color: var(--bg-card);
+  backdrop-filter: blur(var(--card-blur));
+  -webkit-backdrop-filter: blur(var(--card-blur));
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--box-shadow);
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.floating-notification-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: var(--glow-shadow);
+}
+
+.floating-notification-btn .notification-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: var(--accent-danger);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  animation: badge-pulse-red 2s ease-in-out infinite;
+}
+
+@media (max-width: 720px) {
+  .floating-notification-btn {
+    top: 1rem;
+    right: 1rem;
+    width: 40px;
+    height: 40px;
+  }
+}

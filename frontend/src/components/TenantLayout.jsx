@@ -23,6 +23,14 @@ export const TenantLayout = () => {
     catch { return false; }
   });
 
+  // Keep --sidebar-width CSS variable in sync with collapse state
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      '--sidebar-width',
+      sidebarCollapsed ? '68px' : '260px'
+    );
+  }, [sidebarCollapsed]);
+
 
   const handleCollapsedChange = useCallback((val) => {
     setSidebarCollapsed(val);

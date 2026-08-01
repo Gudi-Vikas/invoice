@@ -259,8 +259,7 @@ export const platformBillingController = {
 
         const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-        const [rows, total] = await Promise.all([
-          client.query(
+        const rows = await client.query(
             `SELECT
                bi.id, bi.invoice_number, bi.status,
                bi.amount, bi.tax_amount, bi.total_amount, bi.tax_percentage,
@@ -276,12 +275,11 @@ export const platformBillingController = {
              ORDER BY bi.created_at DESC, bi.id DESC
              LIMIT $${idx} OFFSET $${idx + 1}`,
             [...params, limit, offset]
-          ),
-          client.query(
+          );
+        const total = await client.query(
             `SELECT COUNT(*) FROM platform_billing_invoices bi ${where}`,
             params
-          )
-        ]);
+          );
 
         return { rows: rows.rows, total: parseInt(total.rows[0].count) };
       });
@@ -455,17 +453,15 @@ export const platformBillingController = {
 
     try {
       const result = await runWithoutRLS(async (client) => {
-        const [tenant, invoices] = await Promise.all([
-          client.query('SELECT id, name, domain, status FROM tenants WHERE id = $1', [tenantId]),
-          client.query(
+        const tenant = await client.query('SELECT id, name, domain, status FROM tenants WHERE id = $1', [tenantId]);
+        const invoices = await client.query(
             `SELECT bi.*, p.name AS plan_name
              FROM platform_billing_invoices bi
              LEFT JOIN plans p ON p.id = bi.plan_id
              WHERE bi.tenant_id = $1
              ORDER BY bi.created_at DESC`,
             [tenantId]
-          )
-        ]);
+          );
 
         if (tenant.rows.length === 0) return null;
 

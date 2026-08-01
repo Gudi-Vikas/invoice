@@ -17,7 +17,7 @@ export const documentController = {
    * Handles tax calculations, sequence assignment, line-item storage, and ledger posting.
    */
   createDocument: async (req, res, next) => {
-    const { clientId, type, lines, status, dueDate, notes } = req.body;
+    const { clientId, type, lines, status, dueDate, notes, documentNumber } = req.body;
 
     if (!clientId || !type || !lines || lines.length === 0) {
       return res.status(400).json({ error: 'Client ID, document type, and line items are required.' });
@@ -91,7 +91,7 @@ export const documentController = {
         }
 
         // D. Generate unique document number under row-lock protection
-        const docNumber = await getNextDocumentNumber(client, req.tenantId, type);
+        const docNumber = documentNumber || await getNextDocumentNumber(client, req.tenantId, type);
 
         // E. Insert Document record
         const documentResult = await client.query(
@@ -387,7 +387,7 @@ export const documentController = {
    */
   updateDocumentStatus: async (req, res, next) => {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, utr } = req.body;
 
     const validStatuses = ['draft', 'published', 'sent', 'accepted', 'declined', 'paid', 'overdue', 'voided', 'pending_verification'];
     if (!status || !validStatuses.includes(status)) {
@@ -410,11 +410,16 @@ export const documentController = {
         const wasPublished = ['published', 'sent', 'pending_verification'].includes(doc.status);
         const isNowPublished = ['published', 'sent', 'pending_verification', 'paid'].includes(status);
 
-        // Update status
-        const updateRes = await client.query(
-          `UPDATE documents SET status = $1 WHERE tenant_id = $2 AND id = $3 RETURNING *`,
-          [status, req.tenantId, id]
-        );
+        // Update status and optional utr for paid
+        let updateQuery = `UPDATE documents SET status = $1 WHERE tenant_id = $2 AND id = $3 RETURNING *`;
+        let updateParams = [status, req.tenantId, id];
+
+        if (status === 'paid' && utr) {
+          updateQuery = `UPDATE documents SET status = $1, offline_payment_info = $4 WHERE tenant_id = $2 AND id = $3 RETURNING *`;
+          updateParams.push(JSON.stringify({ method: 'manual', reference: utr, verified_at: new Date() }));
+        }
+
+        const updateRes = await client.query(updateQuery, updateParams);
         const updated = updateRes.rows[0];
 
         // Trigger ledger posting if invoice first moves to published/sent/pending_verification/paid

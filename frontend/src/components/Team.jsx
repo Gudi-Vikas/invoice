@@ -2,11 +2,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useModal } from '../context/ModalContext';
 import {
   MailPlus, Copy, Users, Calendar, Settings2, Trash2,
   LayoutDashboard, CreditCard, Building2, Receipt, Settings
 } from 'lucide-react';
 import api from '../api';
+import ModalPortal from './ModalPortal';
 
 /**
  * Available tenant permission sections.
@@ -84,31 +86,30 @@ const PermissionCheckboxes = ({ selected, onToggle, fullAccess, onFullAccessTogg
 
 // ── Modal Overlay Component ───────────────────────────────────────────────
 const ModalOverlay = ({ children, onClose }) => (
-  <div
-    onClick={onClose}
-    style={{
-      position: 'fixed', inset: 0, zIndex: 1000,
-      background: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: '1.5rem', animation: 'fadeIn 0.2s ease'
-    }}
-  >
+  <ModalPortal>
     <div
-      onClick={e => e.stopPropagation()}
-      className="admin-card"
-      style={{ width: '100%', maxWidth: '520px', padding: '2rem', animation: 'slideUp 0.3s ease', maxHeight: '90vh', overflowY: 'auto' }}
+      className="modal-overlay"
+      onClick={onClose}
+      style={{ backdropFilter: 'blur(4px)', animation: 'fadeIn 0.2s ease' }}
     >
-      {children}
+      <div
+        onClick={e => e.stopPropagation()}
+        className="admin-card"
+        style={{ width: '100%', maxWidth: '520px', padding: '2rem', animation: 'slideUp 0.3s ease', maxHeight: '90vh', overflowY: 'auto' }}
+      >
+        {children}
+      </div>
     </div>
-  </div>
+  </ModalPortal>
 );
 
 /**
  * Team — Admin-facing workspace invite UI with RBAC support.
  */
 export const Team = () => {
-  const { activeTenant, invite, user: currentUser } = useAuth();
+  const { activeTenant, user: currentUser } = useAuth();
   const { showToast } = useToast();
+  const { confirm } = useModal();
 
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
@@ -189,7 +190,11 @@ export const Team = () => {
       showToast('Cannot remove yourself.', 'error');
       return;
     }
-    if (!window.confirm(`Are you sure you want to remove ${user.email} from this workspace?`)) {
+    const isConfirmed = await confirm({
+      title: 'Remove Workspace Member',
+      message: `Are you sure you want to remove ${user.email} from this workspace?`
+    });
+    if (!isConfirmed) {
       return;
     }
 

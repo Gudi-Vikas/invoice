@@ -101,7 +101,7 @@ export const MasterDashboard = () => {
         <div className="glass-card" style={{ padding: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Recent Signups</h3>
-            <button className="btn btn-secondary" onClick={() => navigate('/master/tenants')}
+            <button className="btn btn-secondary" onClick={() => navigate('/tenants')}
               style={{ padding: '0.35rem 0.7rem', fontSize: '0.78rem' }}>
               View All <ArrowUpRight size={12} />
             </button>
@@ -120,7 +120,7 @@ export const MasterDashboard = () => {
               </thead>
               <tbody>
                 {stats.recentSignups.map(t => (
-                  <tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/master/tenants/${t.id}`)}>
+                  <tr key={t.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/tenants/${t.id}`)}>
                     <td style={{ fontWeight: 600 }}>{t.name}</td>
                     <td style={{ color: 'var(--text-secondary)' }}>{t.plan_name || '—'}</td>
                     <td><span className={`badge badge-${t.status === 'active' ? 'paid' : t.status === 'suspended' ? 'overdue' : 'draft'}`}>{t.status}</span></td>
@@ -158,7 +158,7 @@ export const MasterDashboard = () => {
             <button className="btn btn-secondary" onClick={handleMarkOverdue} style={{ flex: 1, fontSize: '0.82rem' }}>
               <AlertTriangle size={14} /> Mark Overdue
             </button>
-            <button className="btn btn-primary" onClick={() => navigate('/master/billing')} style={{ flex: 1, fontSize: '0.82rem' }}>
+            <button className="btn btn-primary" onClick={() => navigate('/billing')} style={{ flex: 1, fontSize: '0.82rem' }}>
               <ArrowUpRight size={14} /> Billing
             </button>
           </div>

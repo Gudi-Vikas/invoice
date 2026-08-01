@@ -7,6 +7,7 @@ import {
   ArrowLeft, CreditCard, Receipt, ShieldAlert,
   Power, PowerOff, Trash2, Save, Users
 } from 'lucide-react';
+import ModalPortal from '../ModalPortal';
 
 /**
  * MasterTenantDetail — Full tenant profile with tabs.
@@ -94,7 +95,7 @@ export const MasterTenantDetail = () => {
     try {
       await api.masterDeleteTenant(id);
       showToast('Tenant permanently deleted.', 'success');
-      navigate('/master/tenants');
+      navigate('/tenants');
     } catch (err) { showToast(err.message, 'error'); }
     finally { setActionInProgress(false); }
   };
@@ -169,7 +170,7 @@ export const MasterTenantDetail = () => {
   if (loading || !data) {
     return (
       <div className="fade-in">
-        <button className="btn btn-secondary" onClick={() => navigate('/master/tenants')} style={{ marginBottom: '1rem' }}>
+        <button className="btn btn-secondary" onClick={() => navigate('/tenants')} style={{ marginBottom: '1rem' }}>
           <ArrowLeft size={15} /> Back
         </button>
         <p style={{ color: 'var(--text-secondary)' }}>Loading tenant details...</p>
@@ -187,7 +188,7 @@ export const MasterTenantDetail = () => {
 
   return (
     <div className="fade-in">
-      <button className="btn btn-secondary" onClick={() => navigate('/master/tenants')}
+      <button className="btn btn-secondary" onClick={() => navigate('/tenants')}
         style={{ marginBottom: '1.25rem', padding: '0.5rem 1rem', fontSize: '0.85rem' }}>
         <ArrowLeft size={15} /> Back to Tenants
       </button>
@@ -247,6 +248,7 @@ export const MasterTenantDetail = () => {
             {[
               ['Name', tenant.name],
               ['Domain', tenant.domain || '—'],
+              ['Contact Phone', tenant.phone || settings?.business_info?.phone || '—'],
               ['Status', tenant.status],
               ['Plan', tenant.plan_name || '—'],
               ['Plan Price', tenant.price_monthly ? `₹${tenant.price_monthly}` : '—'],
@@ -390,148 +392,154 @@ export const MasterTenantDetail = () => {
 
       {/* Generate Invoice Modal */}
       {showGenerateModal && (
-        <div className="modal-overlay">
-          <div className="glass-card modal-card" style={{ '--modal-width': '480px' }}>
-            <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Receipt size={18} style={{ color: 'var(--accent-primary)' }} />
-              Generate Platform Invoice
-            </h3>
-            <form onSubmit={handleGenerateInvoice}>
-              <div className="form-group">
-                <label className="form-label">Billing Period Start</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  value={generateData.billingPeriodStart}
-                  onChange={e => setGenerateData(prev => ({ ...prev, billingPeriodStart: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Billing Period End</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  value={generateData.billingPeriodEnd}
-                  onChange={e => setGenerateData(prev => ({ ...prev, billingPeriodEnd: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Due Date</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  value={generateData.dueDate}
-                  onChange={e => setGenerateData(prev => ({ ...prev, dueDate: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Amount Override (INR, pre-tax, optional)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g. 999.00"
-                  className="form-input"
-                  value={generateData.amountOverride}
-                  onChange={e => setGenerateData(prev => ({ ...prev, amountOverride: e.target.value }))}
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Notes (optional)</label>
-                <textarea
-                  className="form-input"
-                  placeholder="Additional invoice notes"
-                  value={generateData.notes || ''}
-                  onChange={e => setGenerateData(prev => ({ ...prev, notes: e.target.value }))}
-                  style={{ minHeight: '60px' }}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowGenerateModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={generating} style={{ opacity: generating ? 0.7 : 1 }}>{generating ? 'Generating...' : 'Generate'}</button>
-              </div>
-            </form>
+        <ModalPortal>
+          <div className="modal-overlay">
+            <div className="glass-card modal-card" style={{ '--modal-width': '480px' }}>
+              <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Receipt size={18} style={{ color: 'var(--accent-primary)' }} />
+                Generate Platform Invoice
+              </h3>
+              <form onSubmit={handleGenerateInvoice}>
+                <div className="form-group">
+                  <label className="form-label">Billing Period Start</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={generateData.billingPeriodStart}
+                    onChange={e => setGenerateData(prev => ({ ...prev, billingPeriodStart: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Billing Period End</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={generateData.billingPeriodEnd}
+                    onChange={e => setGenerateData(prev => ({ ...prev, billingPeriodEnd: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Due Date</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={generateData.dueDate}
+                    onChange={e => setGenerateData(prev => ({ ...prev, dueDate: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Amount Override (INR, pre-tax, optional)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g. 999.00"
+                    className="form-input"
+                    value={generateData.amountOverride}
+                    onChange={e => setGenerateData(prev => ({ ...prev, amountOverride: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Notes (optional)</label>
+                  <textarea
+                    className="form-input"
+                    placeholder="Additional invoice notes"
+                    value={generateData.notes || ''}
+                    onChange={e => setGenerateData(prev => ({ ...prev, notes: e.target.value }))}
+                    style={{ minHeight: '60px' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowGenerateModal(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={generating} style={{ opacity: generating ? 0.7 : 1 }}>{generating ? 'Generating...' : 'Generate'}</button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Invite User Modal */}
       {showInviteModal && (
-        <div className="modal-overlay">
-          <div className="glass-card modal-card" style={{ '--modal-width': '440px' }}>
-            <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Users size={18} style={{ color: 'var(--accent-primary)' }} />
-              Invite User to Tenant
-            </h3>
-            <form onSubmit={handleInviteUser}>
-              <div className="form-group">
-                <label className="form-label">User Email</label>
-                <input
-                  type="email"
-                  className="form-input"
-                  placeholder="user@example.com"
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Workspace Role</label>
-                <select
-                  className="form-select"
-                  value={inviteRole}
-                  onChange={e => setInviteRole(e.target.value)}
-                >
-                  <option value="member">Member</option>
-                  <option value="billing">Billing</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              
-              {inviteLink && (
-                <div className="info-alert" style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <span className="info-alert-text">Invite link generated:</span>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input className="form-input" value={inviteLink} readOnly style={{ margin: 0 }} />
-                    <button type="button" className="btn btn-secondary" onClick={async () => {
-                      await navigator.clipboard.writeText(inviteLink);
-                      showToast('Invite link copied.', 'success');
-                    }} style={{ padding: '0 0.75rem', height: '40px' }}>
-                      Copy
-                    </button>
-                  </div>
+        <ModalPortal>
+          <div className="modal-overlay">
+            <div className="glass-card modal-card" style={{ '--modal-width': '440px' }}>
+              <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Users size={18} style={{ color: 'var(--accent-primary)' }} />
+                Invite User to Tenant
+              </h3>
+              <form onSubmit={handleInviteUser}>
+                <div className="form-group">
+                  <label className="form-label">User Email</label>
+                  <input
+                    type="email"
+                    className="form-input"
+                    placeholder="user@example.com"
+                    value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    required
+                  />
                 </div>
-              )}
+                <div className="form-group">
+                  <label className="form-label">Workspace Role</label>
+                  <select
+                    className="form-select"
+                    value={inviteRole}
+                    onChange={e => setInviteRole(e.target.value)}
+                  >
+                    <option value="member">Member</option>
+                    <option value="billing">Billing</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                
+                {inviteLink && (
+                  <div className="info-alert" style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <span className="info-alert-text">Invite link generated:</span>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <input className="form-input" value={inviteLink} readOnly style={{ margin: 0 }} />
+                      <button type="button" className="btn btn-secondary" onClick={async () => {
+                        await navigator.clipboard.writeText(inviteLink);
+                        showToast('Invite link copied.', 'success');
+                      }} style={{ padding: '0 0.75rem', height: '40px' }}>
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowInviteModal(false)}>Close</button>
-                <button type="submit" className="btn btn-primary" disabled={!!inviteLink || inviting} style={{ opacity: inviting ? 0.7 : 1 }}>{inviting ? 'Inviting...' : 'Invite'}</button>
-              </div>
-            </form>
+                <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowInviteModal(false)}>Close</button>
+                  <button type="submit" className="btn btn-primary" disabled={!!inviteLink || inviting} style={{ opacity: inviting ? 0.7 : 1 }}>{inviting ? 'Inviting...' : 'Invite'}</button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Delete Modal */}
       {showDeleteModal && (
-        <div className="modal-overlay">
-          <div className="glass-card modal-card" style={{ '--modal-width': '440px' }}>
-            <h3 style={{ color: 'var(--accent-danger)', marginBottom: '1rem' }}>
-              <ShieldAlert size={18} style={{ verticalAlign: 'middle' }} /> Permanently Delete Tenant
-            </h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-              This will permanently delete <strong>{tenant.name}</strong> and all associated data. This action <strong>cannot be undone</strong>.
-            </p>
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-              <button className="btn btn-danger" onClick={handleDelete} disabled={actionInProgress} style={{ opacity: actionInProgress ? 0.7 : 1 }}>
-                <Trash2 size={14} /> {actionInProgress ? 'Deleting...' : 'Delete Forever'}
-              </button>
+        <ModalPortal>
+          <div className="modal-overlay">
+            <div className="glass-card modal-card" style={{ '--modal-width': '440px' }}>
+              <h3 style={{ color: 'var(--accent-danger)', marginBottom: '1rem' }}>
+                <ShieldAlert size={18} style={{ verticalAlign: 'middle' }} /> Permanently Delete Tenant
+              </h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                This will permanently delete <strong>{tenant.name}</strong> and all associated data. This action <strong>cannot be undone</strong>.
+              </p>
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>Cancel</button>
+                <button className="btn btn-danger" onClick={handleDelete} disabled={actionInProgress} style={{ opacity: actionInProgress ? 0.7 : 1 }}>
+                  <Trash2 size={14} /> {actionInProgress ? 'Deleting...' : 'Delete Forever'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
     </div>
   );

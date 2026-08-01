@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../api';
 import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
+import { useModal } from '../context/ModalContext';
 import {
   FileText, Plus, Trash2, ArrowLeft, FilePlus, Copy, Check, X,
   UserPlus, Printer, ChevronLeft, ChevronRight, Tag,
@@ -11,7 +12,7 @@ import {
 } from 'lucide-react';
 import DocumentListTable from './DocumentListTable';
 import { downloadElementAsPdf } from '../utils/pdfUtils';
-
+import DocumentTemplate from './shared/DocumentTemplate';
 /**
  * Documents Module (Quotes & Invoices Manager).
  * Contains list, builder form with real-time tax math, and PDF invoice visualizer.
@@ -22,6 +23,7 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
   const navigate = useNavigate();
   const { settings } = useSettings();
   const { showToast } = useToast();
+  const { prompt } = useModal();
   const [view, setView] = useState(initialView);
   const [documents, setDocuments] = useState([]);
   const [clients, setClients] = useState([]);
@@ -48,6 +50,7 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
   const [formType, setFormType] = useState(defaultType);
   const [formClientId, setFormClientId] = useState('');
   const [formDueDate, setFormDueDate] = useState('');
+  const [formDocumentNumber, setFormDocumentNumber] = useState('');
   const [formLines, setFormLines] = useState([{ description: '', quantity: 1, unitPrice: 0, adjust: 0, vendorId: '', vendorCost: '' }]);
 
 
@@ -179,10 +182,11 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
     try {
       await api.createDocument({
         clientId: formClientId, type: formType, status: 'published',
-        dueDate: formDueDate || undefined, lines: validLines
+        dueDate: formDueDate || undefined, lines: validLines,
+        documentNumber: formDocumentNumber || undefined
       });
       showToast('Document created successfully!', 'success');
-      setFormClientId(''); setFormLines([{ description: '', quantity: 1, unitPrice: 0, adjust: 0, vendorId: '', vendorCost: '' }]);
+      setFormClientId(''); setFormDocumentNumber(''); setFormLines([{ description: '', quantity: 1, unitPrice: 0, adjust: 0, vendorId: '', vendorCost: '' }]);
       setView('list'); loadDocuments();
     } catch (err) {
       showToast('Failed to generate document: ' + err.message, 'error');
@@ -216,11 +220,13 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
     try {
       const res = await api.getMagicToken(doc.id);
       const url = res.data?.portalUrl || `http://localhost:5173/portal/documents/${doc.id}`;
-      navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(url);
+      showToast('Magic link copied!', 'success');
     } catch {
       // Fallback simulated token
       const token = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.${btoa(JSON.stringify({ documentId: doc.id }))}.sig`;
-      navigator.clipboard.writeText(`http://localhost:5173/portal/documents/${token}`);
+      await navigator.clipboard.writeText(`http://localhost:5173/portal/documents/${token}`);
+      showToast('Magic link copied!', 'success');
     }
     setCopiedId(doc.id);
     setTimeout(() => setCopiedId(null), 3000);
@@ -245,10 +251,20 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
     }
   };
 
-  const handleStatusChange = async (docId, newStatus) => {
+  const handleStatusChange = async (docId, newStatus, isManualPaid = false) => {
+    let utr = null;
+    if (newStatus === 'paid' && isManualPaid) {
+      utr = await prompt({ 
+        title: 'Offline Payment', 
+        message: 'Enter UTR or Reference Number to confirm offline payment:',
+        placeholder: 'e.g. UTR123456789'
+      });
+      if (!utr) return; // Cancelled
+    }
+    
     setUpdatingStatus(docId);
     try {
-      await api.updateDocumentStatus(docId, newStatus);
+      await api.updateDocumentStatus(docId, newStatus, utr);
       showToast(`Document status updated to ${newStatus}.`, 'success');
       loadDocuments();
       if (selectedDocId === docId) {
@@ -301,6 +317,7 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
             onCopyLink={handleCopyMagicLink}
             onVerifyPayment={setVerifyingDoc}
             onConvertQuote={handleConvertQuote}
+            copiedId={copiedId}
           />
         </div>
       )}
@@ -342,6 +359,20 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
                   </select>
                 </div>
               </div>
+
+              {((formType === 'invoice' && settings?.invoice_config?.invoice?.autoIncrement === false) ||
+                (formType === 'quote' && settings?.invoice_config?.quote?.autoIncrement === false)) && (
+                <div className="form-group" style={{ marginBottom: '1.5rem', width: '50%' }}>
+                  <label className="form-label">{formType === 'quote' ? 'Quote Number' : 'Invoice Number'} (Manual)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={formDocumentNumber}
+                    onChange={(e) => setFormDocumentNumber(e.target.value)}
+                    placeholder={`Enter custom ${formType} number`}
+                  />
+                </div>
+              )}
 
               {/* Pre-Defined Line Item Quick-Insert */}
               {predefinedItems.length > 0 && (
@@ -437,7 +468,7 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
             </div>
 
             {/* Calculations Summary Card */}
-            <div className="glass-card" style={{ background: 'rgba(0,0,0,0.2)', padding: '1.5rem', border: '1px solid var(--border-color)' }}>
+            <div className="glass-card summary-card" style={{ padding: '1.5rem' }}>
               <h4 style={{ fontSize: '1rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <FileText size={18} /> Financial Summary
               </h4>
@@ -514,6 +545,16 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
                   <Mail size={15} /> Send Email to Client
                 </button>
               )}
+              {docDetails.type === 'invoice' && ['published', 'sent'].includes(docDetails.status) && (
+                <button
+                  className="btn btn-primary"
+                  style={{ backgroundColor: 'var(--accent-success)', borderColor: 'var(--accent-success)', color: '#fff', gap: '0.5rem' }}
+                  onClick={() => handleStatusChange(docDetails.id, 'paid', true)}
+                  disabled={updatingStatus === docDetails.id}
+                >
+                  <Check size={15} /> Mark as Paid
+                </button>
+              )}
               <button
                 className="btn btn-primary"
                 onClick={handleDownloadPdf}
@@ -573,291 +614,26 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
           )}
 
           {/* Print-Only PDF Container */}
-          <div id="print-area" className="invoice-container">
-            {/* Header */}
-            <div className="invoice-header">
-              <div className="invoice-logo-container">
-                {docDetails.business_info?.logoUrl ? (
-                  <img src={docDetails.business_info.logoUrl} alt="Logo" className="invoice-logo" />
-                ) : (
-                  <h2 className="invoice-logo-fallback">
-                    {docDetails.business_info?.businessName || settings?.business_info?.businessName || 'Ultrakey'}
-                  </h2>
-                )}
-              </div>
-              <div className="invoice-title-banner">
-                {docDetails.type === 'quote' ? 'Quotation' : 'Invoice'}
-              </div>
-            </div>
+          {(() => {
+            const convenienceFeeEnabled = docDetails.convenience_fee_enabled === true;
+            const surcharge = parseFloat(docDetails.convenience_fee_amount || 0);
+            const surchargeTax = parseFloat(docDetails.convenience_fee_tax_amount || 0);
+            const originalTotal = parseFloat(docDetails.total_due);
+            const finalTotal = originalTotal + surcharge + surchargeTax;
 
-            {/* Mid Section (From, To, Meta) */}
-            <div className="invoice-mid-section">
-              {/* Left Column: From and To Addresses */}
-              <div className="invoice-left-col">
-                {/* From Address */}
-                <div className="invoice-address-block">
-                  <div className="invoice-address-header">From:</div>
-                  <div className="invoice-address-body">
-                    <p><b>{docDetails.business_info?.businessName || settings?.business_info?.businessName || 'Ultrakey IT Solutions Private Limited'}</b></p>
-                    {docDetails.business_info?.address || settings?.business_info?.address ? (
-                      (docDetails.business_info?.address || settings?.business_info?.address || '').split('\n').map((line, i) => <p key={i}>{line}</p>)
-                    ) : (
-                      <>
-                        <p>Flat No. 204, 2nd Floor, Cyber Residency,</p>
-                        <p>Inidra Nagar, Gachibowli,</p>
-                        <p>Hyderabad, Telangana, India-500032</p>
-                      </>
-                    )}
-                    <p>{docDetails.business_info?.email || settings?.business_info?.email || 'support@ultrakeyit.com'}</p>
-                    {docDetails.business_info?.extraInfo || settings?.business_info?.extraInfo ? (
-                      <div dangerouslySetInnerHTML={{ __html: docDetails.business_info?.extraInfo || settings?.business_info?.extraInfo || '' }} />
-                    ) : (
-                      <p><b>GST No:</b> 36AADCU5062A1ZO</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* To Address */}
-                <div className="invoice-address-block">
-                  <div className="invoice-address-header">To:</div>
-                  <div className="invoice-address-body">
-                    <p><b>{docDetails.client_name}</b></p>
-                    {(docDetails.billing_address?.street || docDetails.billing_address?.city) && (
-                      <>
-                        {docDetails.billing_address.street && <p>{docDetails.billing_address.street}</p>}
-                        {(docDetails.billing_address.city || docDetails.billing_address.state || docDetails.billing_address.zip) && (
-                          <p>
-                            {[docDetails.billing_address.city, docDetails.billing_address.state].filter(Boolean).join(', ')} {docDetails.billing_address.zip || ''}
-                          </p>
-                        )}
-                      </>
-                    )}
-                    {docDetails.client_email && <p>{docDetails.client_email}</p>}
-                    {docDetails.client_extra_info && (
-                      <div dangerouslySetInnerHTML={{ __html: docDetails.client_extra_info }} />
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column: Invoice metadata and payment terms */}
-              <div className="invoice-right-col">
-                <div className="invoice-meta-list">
-                  <span><b>Invoice Number</b></span>
-                  <span>{docDetails.document_number}</span>
-                  
-                  <span><b>Invoice Date</b></span>
-                  <span>{new Date(docDetails.created_at).toLocaleDateString()}</span>
-                  
-                  <span><b>Due Date</b></span>
-                  <span>{new Date(docDetails.due_date).toLocaleDateString()}</span>
-                </div>
-
-                <div className="invoice-total-due-banner">
-                  <span>TOTAL DUE</span>
-                  <span>{currencySymbol}{parseFloat(docDetails.total_due).toFixed(2)}</span>
-                </div>
-
-                <div className="invoice-payment-terms">
-                  {docDetails.type === 'quote'
-                    ? (docDetails.invoice_config?.quote?.termsAndConditions || settings?.invoice_config?.quote?.termsAndConditions || 'Quotation valid for 30 days.')
-                    : (docDetails.invoice_config?.invoice?.termsAndConditions || settings?.invoice_config?.invoice?.termsAndConditions || 'Payment is due within 14 days from date of invoice. Late payment is subject to fees of 5% per month.')}
-                </div>
-
-                <div className="invoice-payment-methods">
-                  <h4>Payment Methods:</h4>
-                  <ol>
-                    <li>60% Advance Payment</li>
-                    <li>Remaining 40% Final Settlement</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-
-            {/* Line Items Table */}
-            <table className="invoice-table">
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left' }}>HRS/QTY</th>
-                  <th style={{ textAlign: 'left' }}>SERVICE DETAILS</th>
-                  <th style={{ textAlign: 'right' }}>RATE/PRICE</th>
-                  <th style={{ textAlign: 'right' }}>SUB TOTAL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {docDetails.lines?.map((line, index) => (
-                  <tr key={index}>
-                    <td style={{ textAlign: 'left', verticalAlign: 'top' }}>{parseFloat(line.quantity)}</td>
-                    <td style={{ textAlign: 'left', verticalAlign: 'top' }}>
-                      <span className="invoice-item-desc">{line.description}</span>
-                      <span className="invoice-item-subdesc">{line.description}</span>
-                      {line.vendor_name && (
-                        <span className="invoice-item-subdesc" style={{ marginTop: '0.25rem' }}>
-                          Fulfilled by: {line.vendor_name}
-                          {line.vendor_cost !== null && line.vendor_cost !== undefined && ` (Cost: ${currencySymbol}${parseFloat(line.vendor_cost).toFixed(2)})`}
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ textAlign: 'right', verticalAlign: 'top' }}>{currencySymbol}{parseFloat(line.unit_price).toFixed(2)}</td>
-                    <td style={{ textAlign: 'right', verticalAlign: 'top', fontWeight: 600 }}>{currencySymbol}{parseFloat(line.amount).toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {/* Bottom section: Bank details and totals */}
-            <div className="invoice-bottom-section">
-              {/* Left Column: Bank and payment instructions */}
-              {(() => {
-                const pConfig = docDetails.payments_config || settings?.payments_config || {};
-                const bankDetailsText = pConfig.bankDetails;
-                const bankName = pConfig.bankName;
-                const bankAccountNumber = pConfig.bankAccountNumber;
-                const bankAccountName = pConfig.bankAccountName;
-                const bankIfsc = pConfig.bankIfsc;
-                const bankBranch = pConfig.bankBranch;
-                const gpayNumber = pConfig.gpayNumber;
-                const upiId = pConfig.upiId;
-
-                const hasBankDetails = !!(bankName || bankAccountNumber || bankAccountName || bankIfsc || bankBranch);
-                const hasGPay = !!gpayNumber;
-                const hasUpi = !!upiId;
-
-                if (!hasBankDetails && !hasGPay && !hasUpi && !bankDetailsText) {
-                  return (
-                    <div className="invoice-bank-details-box">
-                      <h4>Payment Instructions</h4>
-                      <p style={{ color: '#64748b', margin: 0 }}>No payment instructions configured.</p>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="invoice-bank-details-box">
-                    <h4>Pay Invoice amount via one of the options mentioned below</h4>
-                    
-                    {hasGPay && (
-                      <div className="invoice-bank-option" style={{ marginBottom: '1rem' }}>
-                        <div className="invoice-bank-option-title">Option 1: Gpay (or) Phonepe Number:</div>
-                        <div style={{ fontWeight: 600, color: '#1e293b' }}>{gpayNumber}</div>
-                      </div>
-                    )}
-
-                    {hasBankDetails && (
-                      <div className="invoice-bank-option" style={{ marginBottom: '1rem' }}>
-                        <div className="invoice-bank-option-title">Option 2: Direct To Organization Current A/C</div>
-                        <div className="invoice-bank-details-grid">
-                          {bankAccountNumber && (
-                            <>
-                              <span style={{ color: '#475569', fontWeight: 500 }}>Account Number:</span>
-                              <span style={{ fontWeight: 600, color: '#1e293b' }}>{bankAccountNumber}</span>
-                            </>
-                          )}
-                          {bankAccountName && (
-                            <>
-                              <span style={{ color: '#475569', fontWeight: 500 }}>Name:</span>
-                              <span style={{ fontWeight: 600, color: '#1e293b' }}>{bankAccountName}</span>
-                            </>
-                          )}
-                          {bankName && (
-                            <>
-                              <span style={{ color: '#475569', fontWeight: 500 }}>Bank Name:</span>
-                              <span style={{ fontWeight: 600, color: '#1e293b' }}>{bankName}</span>
-                            </>
-                          )}
-                          {bankIfsc && (
-                            <>
-                              <span style={{ color: '#475569', fontWeight: 500 }}>IFSC:</span>
-                              <span style={{ fontWeight: 600, color: '#1e293b' }}>{bankIfsc}</span>
-                            </>
-                          )}
-                          {bankBranch && (
-                            <>
-                              <span style={{ color: '#475569', fontWeight: 500 }}>Branch:</span>
-                              <span style={{ fontWeight: 600, color: '#1e293b' }}>{bankBranch}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {hasUpi && (
-                      <div className="invoice-bank-option" style={{ marginBottom: '1rem' }}>
-                        <div className="invoice-bank-option-title">Option 3: Pay via UPI ID</div>
-                        <div style={{ fontWeight: 600, color: '#1e293b' }}>{upiId}</div>
-                      </div>
-                    )}
-
-                    {bankDetailsText && (
-                      <div className="invoice-bank-option" style={{ borderTop: '1px solid #cbd5e1', paddingTop: '0.75rem', marginTop: '0.75rem' }}>
-                        <div className="invoice-bank-option-title" style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: '#475569', marginBottom: '0.25rem' }}>Additional Notes:</div>
-                        <div style={{ whiteSpace: 'pre-wrap', color: '#475569' }}>{bankDetailsText}</div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* Right Column: Summary totals */}
-              {(() => {
-                const subTotal = parseFloat(docDetails.sub_total);
-                const discount = parseFloat(docDetails.discount_amount || 0);
-                const tax = parseFloat(docDetails.tax_amount);
-                const convenienceFeeEnabled = docDetails.convenience_fee_enabled === true;
-                const surcharge = parseFloat(docDetails.convenience_fee_amount || 0);
-                const surchargeTax = parseFloat(docDetails.convenience_fee_tax_amount || 0);
-                const originalTotal = parseFloat(docDetails.total_due);
-                const finalTotal = originalTotal + surcharge + surchargeTax;
-
-                const paidAmount = docDetails.status === 'paid' ? finalTotal : 0;
-                const remainingDue = docDetails.status === 'paid' ? 0 : finalTotal;
-
-                return (
-                  <div className="invoice-totals-box">
-                    <div className="invoice-totals-row">
-                      <span>Sub Total</span>
-                      <span>{currencySymbol}{(subTotal + discount).toFixed(2)}</span>
-                    </div>
-                    {discount > 0 && (
-                      <div className="invoice-totals-row discount">
-                        <span>Discount</span>
-                        <span>{currencySymbol}{discount.toFixed(2)}</span>
-                      </div>
-                    )}
-                    <div className="invoice-totals-row">
-                      <span>{docDetails.tax_config?.defaultTaxName || 'GST'} ({docDetails.tax_config?.defaultTaxPercentage || 18}%)</span>
-                      <span>{currencySymbol}{tax.toFixed(2)}</span>
-                    </div>
-                    {convenienceFeeEnabled && (
-                      <>
-                        <div className="invoice-totals-row">
-                          <span>Invoice Total</span>
-                          <span>{currencySymbol}{originalTotal.toFixed(2)}</span>
-                        </div>
-                        <div className="invoice-totals-row" style={{ color: 'var(--accent-warning)' }}>
-                          <span>Gateway Fee (2% + GST)</span>
-                          <span>{currencySymbol}{(surcharge + surchargeTax).toFixed(2)}</span>
-                        </div>
-                      </>
-                    )}
-                    <div className="invoice-totals-row bold-divider">
-                      <span>Paid</span>
-                      <span>{currencySymbol}{paidAmount.toFixed(2)}</span>
-                    </div>
-                    <div className="invoice-totals-due-banner">
-                      <span>TOTAL DUE</span>
-                      <span>{currencySymbol}{remainingDue.toFixed(2)}</span>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Footer */}
-            <div className="invoice-footer-line">
-              Thanks for choosing {docDetails.business_info?.businessName || settings?.business_info?.businessName || 'Ultrakey IT Solutions Pvt. Ltd.'} | {docDetails.business_info?.email || settings?.business_info?.email || 'support@ultrakeyit.com'} | {docDetails.business_info?.website || settings?.business_info?.website || '+91 6300440316'}
-            </div>
-          </div>
+            return (
+              <DocumentTemplate
+                doc={docDetails}
+                businessInfo={docDetails.business_info || settings?.business_info}
+                currencySymbol={currencySymbol}
+                finalTotal={finalTotal}
+                surcharge={surcharge}
+                surchargeTax={surchargeTax}
+                originalTotal={originalTotal}
+                passGatewayFees={convenienceFeeEnabled}
+              />
+            );
+          })()}
         </div>
       )}
 

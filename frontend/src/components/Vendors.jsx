@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../api';
 import { useToast } from '../context/ToastContext';
+import { useModal } from '../context/ModalContext';
 import { UserPlus, FileCheck, CheckCircle2, ShieldAlert, AlertTriangle, Trash2, X, Wallet } from 'lucide-react';
 
 /**
@@ -9,6 +10,7 @@ import { UserPlus, FileCheck, CheckCircle2, ShieldAlert, AlertTriangle, Trash2, 
  */
 export const Vendors = () => {
   const { showToast } = useToast();
+  const { confirm } = useModal();
   const [vendors, setVendors] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -165,7 +167,11 @@ export const Vendors = () => {
   };
 
   const handleDeleteVendor = async (vendorId) => {
-    if (!window.confirm('Are you sure you want to remove this vendor? This action cannot be undone.')) return;
+    const isConfirmed = await confirm({
+      title: 'Delete Vendor',
+      message: 'Are you sure you want to remove this vendor? This action cannot be undone.'
+    });
+    if (!isConfirmed) return;
     try {
       await api.deleteVendor(vendorId);
       showToast('Vendor deleted successfully.', 'success');

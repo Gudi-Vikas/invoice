@@ -1,5 +1,6 @@
 import { runInTransaction } from '../config/db.js';
 import { sanitizeHtmlContent } from '../utils/sanitize.js';
+import { isValidPhone, normalizePhone } from '../utils/validation.js';
 
 /**
  * Controller for retrieving and updating tenant configuration blocks.
@@ -38,6 +39,12 @@ export const settingsController = {
   updateSettings: async (req, res, next) => {
     const { category } = req.params;
     const updatePayload = req.body;
+
+    if (category === 'business' && updatePayload.phone) {
+      if (!isValidPhone(updatePayload.phone)) {
+        return res.status(400).json({ error: 'Please enter a valid contact phone number.' });
+      }
+    }
 
     try {
       const updatedValue = await runInTransaction(req.tenantId, async (client) => {
@@ -100,6 +107,13 @@ export const settingsController = {
            WHERE tenant_id = $2`,
           [targetValue, req.tenantId]
         );
+
+        if (category === 'business' && updatePayload.phone !== undefined) {
+          await client.query(
+            `UPDATE tenants SET phone = $1 WHERE id = $2`,
+            [updatePayload.phone ? normalizePhone(updatePayload.phone) : null, req.tenantId]
+          );
+        }
 
         return targetValue;
       });

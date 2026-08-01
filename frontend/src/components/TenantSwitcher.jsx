@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { ChevronDown, Plus, Building2, Check } from 'lucide-react';
+import { isValidPhone, isValidEmail } from '../utils/validation';
 
 /**
  * TenantSwitcher — Dropdown component for the Sidebar footer.
@@ -17,6 +18,7 @@ export const TenantSwitcher = () => {
   const [newTenantName, setNewTenantName] = useState('');
   const [newTenantDomain, setNewTenantDomain] = useState('');
   const [newTenantEmail, setNewTenantEmail] = useState('');
+  const [newTenantPhone, setNewTenantPhone] = useState('+91 ');
   const [newTenantAddress, setNewTenantAddress] = useState('');
   const [newTenantWebsite, setNewTenantWebsite] = useState('');
   const [newTenantExtraInfo, setNewTenantExtraInfo] = useState('');
@@ -45,9 +47,20 @@ export const TenantSwitcher = () => {
     e.preventDefault();
     if (!newTenantName.trim()) return;
 
+    if (newTenantEmail && !isValidEmail(newTenantEmail)) {
+      showToast('Please enter a valid business email address.', 'error');
+      return;
+    }
+
+    if (newTenantPhone && !isValidPhone(newTenantPhone)) {
+      showToast('Please enter a valid phone number (e.g. +91 9876543210).', 'error');
+      return;
+    }
+
     try {
       await createTenant(newTenantName, newTenantDomain, {
         businessEmail: newTenantEmail,
+        phone: newTenantPhone,
         address: newTenantAddress,
         website: newTenantWebsite,
         extraInfo: newTenantExtraInfo
@@ -57,6 +70,7 @@ export const TenantSwitcher = () => {
       setNewTenantName('');
       setNewTenantDomain('');
       setNewTenantEmail('');
+      setNewTenantPhone('');
       setNewTenantAddress('');
       setNewTenantWebsite('');
       setNewTenantExtraInfo('');
@@ -184,7 +198,7 @@ export const TenantSwitcher = () => {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Business Email</label>
                   <input
@@ -192,6 +206,15 @@ export const TenantSwitcher = () => {
                     placeholder="billing@mybusiness.com"
                     value={newTenantEmail}
                     onChange={(e) => setNewTenantEmail(e.target.value)}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Contact Phone</label>
+                  <input
+                    type="tel" className="form-input"
+                    placeholder="+91 9876543210"
+                    value={newTenantPhone}
+                    onChange={(e) => setNewTenantPhone(e.target.value)}
                   />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>

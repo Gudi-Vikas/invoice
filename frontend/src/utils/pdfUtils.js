@@ -26,7 +26,23 @@ export const downloadElementAsPdf = async (elementId, filename = 'document.pdf')
     margin:       [0.25, 0.25, 0.25, 0.25],
     filename:     filename,
     image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, useCORS: true, logging: false, scrollY: 0 },
+    html2canvas:  { 
+      scale: 2, 
+      useCORS: true, 
+      logging: false,
+      scrollY: 0,
+      onclone: (clonedDoc) => {
+        const el = clonedDoc.getElementById(elementId);
+        if (el) {
+          el.style.margin = '0';
+          el.style.boxShadow = 'none';
+          el.style.border = 'none';
+          el.style.width = '850px';
+          el.style.maxWidth = '850px';
+          el.style.transform = 'none';
+        }
+      }
+    },
     jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
   };
 

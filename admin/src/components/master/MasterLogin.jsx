@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Layers, LogIn, ShieldCheck } from 'lucide-react';
+import { Layers, LogIn, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import ThemeToggle from '../ThemeToggle';
 
 /**
@@ -17,6 +17,7 @@ export const MasterLogin = () => {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -26,7 +27,7 @@ export const MasterLogin = () => {
     try {
       await masterLogin(email, password);
       showToast('Master admin login successful.', 'success');
-      navigate('/master/dashboard');
+      navigate('/dashboard');
     } catch (err) {
       setError(err.message);
       showToast(err.message, 'error');
@@ -84,10 +85,27 @@ export const MasterLogin = () => {
             <input type="email" className="form-input" placeholder="admin@ultrakeyit.com"
               value={email} onChange={(e) => { setEmail(e.target.value); setError(''); }} required />
           </div>
-          <div className="form-group">
+          <div className="form-group" style={{ position: 'relative' }}>
             <label className="form-label">Password</label>
-            <input type="password" className="form-input" placeholder="••••••••"
-              value={password} onChange={(e) => { setPassword(e.target.value); setError(''); }} required />
+            <input type={showPassword ? "text" : "password"} className="form-input" placeholder="••••••••"
+              value={password} onChange={(e) => { setPassword(e.target.value); setError(''); }} required 
+              style={{ paddingRight: '2.5rem' }} />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: 'absolute',
+                right: '0.75rem',
+                top: '2.2rem',
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                padding: '0'
+              }}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
           <button type="submit" className="btn btn-primary" disabled={submitting}
             style={{
@@ -100,12 +118,7 @@ export const MasterLogin = () => {
           </button>
         </form>
 
-        <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-          <button type="button" onClick={() => navigate('/login')}
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'var(--font-body)' }}>
-            ← Tenant User Login
-          </button>
-        </div>
+
       </div>
     </div>
   );

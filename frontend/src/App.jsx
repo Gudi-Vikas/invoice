@@ -4,6 +4,7 @@ import { SettingsProvider } from './context/SettingsContext';
 import { ToastProvider } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { ModalProvider } from './context/ModalContext';
 
 // Auth Pages
 import LoginPage from './components/auth/LoginPage';
@@ -22,15 +23,7 @@ import Team from './components/Team';
 // Client Portal (public, magic-link authenticated)
 import ClientPortal from './components/ClientPortal';
 
-// Master Admin
-import MasterLogin from './components/master/MasterLogin';
-import MasterLayout from './components/master/MasterLayout';
-import MasterDashboard from './components/master/MasterDashboard';
-import MasterTenants from './components/master/MasterTenants';
-import MasterTenantDetail from './components/master/MasterTenantDetail';
-import MasterBilling from './components/master/MasterBilling';
-import MasterAdmins from './components/master/MasterAdmins';
-import MasterPlans from './components/master/MasterPlans';
+
 
 /**
  * Main Application Shell.
@@ -47,8 +40,9 @@ function App() {
       <ToastProvider>
         <AuthProvider>
           <NotificationProvider>
-          <BrowserRouter>
-          <Routes>
+            <ModalProvider>
+              <BrowserRouter>
+                <Routes>
             {/* ── Public Auth Routes ──────────────────────────── */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/join" element={<JoinPage />} />
@@ -80,28 +74,14 @@ function App() {
               <Route path="/subscription" element={<SubscriptionPage />} />
             </Route>
 
-            {/* ── Master Admin Routes ─────────────────────────── */}
-            <Route path="/master/login" element={<MasterLogin />} />
-            <Route
-              element={
-                <ProtectedRoute requireMaster>
-                  <MasterLayout />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/master/dashboard" element={<MasterDashboard />} />
-              <Route path="/master/plans" element={<MasterPlans />} />
-              <Route path="/master/tenants" element={<MasterTenants />} />
-              <Route path="/master/tenants/:id" element={<MasterTenantDetail />} />
-              <Route path="/master/billing" element={<MasterBilling />} />
-              <Route path="/master/admins" element={<MasterAdmins />} />
-            </Route>
+
 
             {/* ── Catch-all redirect ──────────────────────────── */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </BrowserRouter>
+                </Routes>
+              </BrowserRouter>
+            </ModalProvider>
           </NotificationProvider>
         </AuthProvider>
     </ToastProvider>

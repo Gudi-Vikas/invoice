@@ -15,9 +15,12 @@
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name VARCHAR(255) NOT NULL,
         domain VARCHAR(255) UNIQUE,
+        phone VARCHAR(50),
         status VARCHAR(50) NOT NULL DEFAULT 'active', -- active, suspended, trial
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
 
     -- 2. Users Table (Global registry for authentication)
     CREATE TABLE IF NOT EXISTS users (

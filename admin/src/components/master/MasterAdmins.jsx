@@ -7,6 +7,7 @@ import {
   ShieldCheck, ToggleLeft, ToggleRight, UserPlus, X,
   LayoutDashboard, CreditCard, Building2, Receipt, Eye, EyeOff, Settings2
 } from 'lucide-react';
+import ModalPortal from '../ModalPortal';
 
 /**
  * Available master-admin permission sections.
@@ -101,26 +102,24 @@ const PermissionCheckboxes = ({ selected, onToggle, fullAccess, onFullAccessTogg
 
 // ── Modal Overlay Component ───────────────────────────────────────────────
 const ModalOverlay = ({ children, onClose }) => (
-  <div
-    onClick={onClose}
-    style={{
-      position: 'fixed', inset: 0, zIndex: 1000,
-      background: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: '1.5rem', animation: 'fadeIn 0.2s ease'
-    }}
-  >
+  <ModalPortal>
     <div
-      onClick={e => e.stopPropagation()}
-      className="admin-card"
-      style={{
-        width: '100%', maxWidth: '520px', padding: '2rem',
-        animation: 'slideUp 0.3s ease', maxHeight: '90vh', overflowY: 'auto'
-      }}
+      className="modal-overlay"
+      onClick={onClose}
+      style={{ backdropFilter: 'blur(4px)', animation: 'fadeIn 0.2s ease' }}
     >
-      {children}
+      <div
+        onClick={e => e.stopPropagation()}
+        className="admin-card"
+        style={{
+          width: '100%', maxWidth: '520px', padding: '2rem',
+          animation: 'slideUp 0.3s ease', maxHeight: '90vh', overflowY: 'auto'
+        }}
+      >
+        {children}
+      </div>
     </div>
-  </div>
+  </ModalPortal>
 );
 
 /**

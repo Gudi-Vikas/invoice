@@ -1,4 +1,5 @@
 import { runInTransaction } from '../config/db.js';
+import { isValidEmail, normalizeEmail } from '../utils/validation.js';
 
 /**
  * Controller for managing client contacts for invoice and quotation routing.
@@ -15,23 +16,28 @@ export const clientController = {
       return res.status(400).json({ error: 'Client name and email address are required.' });
     }
 
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+
+    const cleanEmail = normalizeEmail(email);
+
     try {
       const newClient = await runInTransaction(req.tenantId, async (client) => {
-        const existing = await client.query(
-          `SELECT id FROM clients WHERE tenant_id = $1 AND email = $2`,
-          [req.tenantId, email]
-        );
-        if (existing.rows.length > 0) {
-          throw Object.assign(new Error('A client with this email already exists.'), { status: 409 });
+        try {
+          const insertRes = await client.query(
+            `INSERT INTO clients (tenant_id, name, email, billing_address, extra_info)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, name, email, billing_address, extra_info, created_at`,
+            [req.tenantId, name, cleanEmail, billingAddress || '{}', extraInfo || null]
+          );
+          return insertRes.rows[0];
+        } catch (pgErr) {
+          if (pgErr.code === '23505') {
+            throw Object.assign(new Error('A client with this email address already exists in this workspace.'), { statusCode: 409 });
+          }
+          throw pgErr;
         }
-
-        const insertRes = await client.query(
-          `INSERT INTO clients (tenant_id, name, email, billing_address, extra_info)
-           VALUES ($1, $2, $3, $4, $5)
-           RETURNING id, name, email, billing_address, extra_info, created_at`,
-          [req.tenantId, name, email, billingAddress || '{}', extraInfo || null]
-        );
-        return insertRes.rows[0];
       });
 
       return res.status(201).json({
@@ -39,6 +45,9 @@ export const clientController = {
         data: newClient
       });
     } catch (err) {
+      if (err.statusCode) {
+        return res.status(err.statusCode).json({ error: err.message });
+      }
       next(err);
     }
   },

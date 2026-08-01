@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { runInTransaction, runWithoutRLS } from '../config/db.js';
 import { initializeLedgerAccounts } from '../services/ledgerService.js';
 import eventBus from '../services/eventBus.js';
+import { isValidEmail, isValidPhone, normalizeEmail, normalizePhone } from '../utils/validation.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const INVITE_TTL_HOURS = 72;
@@ -49,7 +50,8 @@ const buildDefaultSettings = (name, email) => ({
       dueDateDays: 14,
       termsAndConditions: 'Payment is due within 14 days from invoice date.',
       footerNotes: 'Thank you for your business!',
-      templateDesign: 'default'
+      templateDesign: 'default',
+      templateColor: '#234a75'
     },
     quote: {
       prefix: 'QT-',
@@ -61,7 +63,8 @@ const buildDefaultSettings = (name, email) => ({
       actionOnAccept: 'convert_to_invoice',
       termsAndConditions: 'Quotation valid for 30 days.',
       footerNotes: 'Looking forward to working with you.',
-      templateDesign: 'default'
+      templateDesign: 'default',
+      templateColor: '#234a75'
     }
   },
   tax_config: {
@@ -171,11 +174,26 @@ export const authController = {
   //    Safe against duplicate emails: PG error 23505 → 400 (not 500).
   // ─────────────────────────────────────────────────────────────────────────
   signup: async (req, res, next) => {
-    const { name, domain, email, password } = req.body;
+    const { name, domain, email, password, phone } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Tenant name, email, and password are required.' });
     }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+
+    if (phone && !isValidPhone(phone)) {
+      return res.status(400).json({ error: 'Please enter a valid contact phone number.' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
+    }
+
+    const cleanEmail = normalizeEmail(email);
+    const cleanPhone = phone ? normalizePhone(phone) : null;
 
     try {
       const result = await runInTransaction(null, async (client) => {
@@ -183,10 +201,10 @@ export const authController = {
         let tenant;
         try {
           const tenantResult = await client.query(
-            `INSERT INTO tenants (name, domain, status)
-              VALUES ($1, $2, 'active')
-              RETURNING id, name, domain`,
-            [name, domain || null]
+            `INSERT INTO tenants (name, domain, phone, status)
+              VALUES ($1, $2, $3, 'active')
+              RETURNING id, name, domain, phone`,
+            [name, domain || null, cleanPhone]
           );
           tenant = tenantResult.rows[0];
         } catch (pgErr) {
@@ -209,9 +227,6 @@ export const authController = {
 
         // B. Insert or retrieve global user
         let user;
-
-        // Try creating a new user.
-        // If email already exists, do nothing instead of throwing an error.
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const userResult = await client.query(
@@ -221,7 +236,7 @@ export const authController = {
   ON CONFLICT (email) DO NOTHING
   RETURNING id, email
   `,
-          [email, hashedPassword]
+          [cleanEmail, hashedPassword]
         );
 
         if (userResult.rows.length > 0) {
@@ -235,7 +250,7 @@ export const authController = {
     FROM users
     WHERE email = $1
     `,
-            [email]
+            [cleanEmail]
           );
 
           const existing = existingRes.rows[0];
@@ -268,7 +283,7 @@ export const authController = {
         );
 
         // D. Seed settings, ledger accounts, and starter subscription
-        await seedNewTenant(client, tenantId, name, email);
+        await seedNewTenant(client, tenantId, name, cleanEmail, { phone: cleanPhone || '' });
 
         return { tenant, user };
       });
@@ -305,6 +320,12 @@ export const authController = {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
 
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+
+    const cleanEmail = normalizeEmail(email);
+
     try {
       // Cross-tenant operation: users (global) + tenant_users (RLS) membership lookup.
       // Uses runWithoutRLS because the user may belong to multiple tenants and
@@ -312,7 +333,7 @@ export const authController = {
       const { user, tenants } = await runWithoutRLS(async (client) => {
         const userRes = await client.query(
           'SELECT id, email, password_hash FROM users WHERE email = $1',
-          [email]
+          [cleanEmail]
         );
         if (userRes.rows.length === 0) {
           return { user: null, tenants: [] };
@@ -434,6 +455,12 @@ export const authController = {
       return res.status(400).json({ error: 'email is required.' });
     }
 
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address.' });
+    }
+
+    const cleanEmail = normalizeEmail(email);
+
     const allowedRoles = ['admin', 'billing', 'member'];
     if (!allowedRoles.includes(role)) {
       return res.status(400).json({ error: `role must be one of: ${allowedRoles.join(', ')}.` });
@@ -449,17 +476,27 @@ export const authController = {
           `SELECT tu.role FROM tenant_users tu
            JOIN users u ON u.id = tu.user_id
            WHERE tu.tenant_id = $1 AND u.email = $2`,
-          [tenantId, email]
+          [tenantId, cleanEmail]
         );
         if (alreadyMember.rows.length > 0) {
           throw Object.assign(
-            new Error(`${email} is already a ${alreadyMember.rows[0].role} of this workspace.`),
+            new Error(`${cleanEmail} is already a ${alreadyMember.rows[0].role} of this workspace.`),
             { statusCode: 409 }
           );
         }
 
         const expiresAt = new Date();
         expiresAt.setHours(expiresAt.getHours() + INVITE_TTL_HOURS);
+
+        let actualInvitedBy = invitedBy;
+        if (req.masterAdmin) {
+          const anyAdmin = await client.query(`SELECT user_id FROM tenant_users WHERE tenant_id = $1 AND role = 'admin' LIMIT 1`, [tenantId]);
+          if (anyAdmin.rows.length > 0) {
+            actualInvitedBy = anyAdmin.rows[0].user_id;
+          } else {
+            throw Object.assign(new Error('Cannot invite users to a tenant with no admin users.'), { statusCode: 400 });
+          }
+        }
 
         // Upsert: if a pending invite already exists for this (tenant, email), refresh it
         const inviteRes = await client.query(
@@ -474,7 +511,7 @@ export const authController = {
              expires_at = EXCLUDED.expires_at,
              used_at    = NULL
            RETURNING token, expires_at`,
-          [tenantId, invitedBy, email, role, permissions ? JSON.stringify(permissions) : null, expiresAt]
+          [tenantId, actualInvitedBy, cleanEmail, role, permissions ? JSON.stringify(permissions) : null, expiresAt]
         );
 
         const { token: invToken, expires_at: expiresAtResult } = inviteRes.rows[0];
@@ -487,7 +524,7 @@ export const authController = {
       });
 
       return res.status(201).json({
-        message: `Invite created for ${email}.`,
+        message: `Invite created for ${cleanEmail}.`,
         inviteToken: inviteResult.invToken,
         expiresAt: inviteResult.expiresAtResult,
         // Convenience: the admin can embed this token into a join link
@@ -660,7 +697,7 @@ export const authController = {
   //    Requires: authenticateToken (any valid JWT).
   // ─────────────────────────────────────────────────────────────────────────
   createTenant: async (req, res, next) => {
-    const { name, domain, address, website, extraInfo, businessEmail } = req.body;
+    const { name, domain, address, website, extraInfo, businessEmail, phone } = req.body;
     const userId = req.user.id;
     // Default to the user's login email if businessEmail is not provided
     const email = businessEmail || req.user.email;
@@ -669,16 +706,27 @@ export const authController = {
       return res.status(400).json({ error: 'Tenant name is required.' });
     }
 
+    if (businessEmail && !isValidEmail(businessEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid business email address.' });
+    }
+
+    if (phone && !isValidPhone(phone)) {
+      return res.status(400).json({ error: 'Please enter a valid contact phone number.' });
+    }
+
+    const cleanEmail = normalizeEmail(email);
+    const cleanPhone = phone ? normalizePhone(phone) : null;
+
     try {
       const result = await runInTransaction(null, async (client) => {
         // A. Insert new tenant
         let tenant;
         try {
           const tenantResult = await client.query(
-            `INSERT INTO tenants (name, domain, status)
-             VALUES ($1, $2, 'active')
-             RETURNING id, name, domain`,
-            [name, domain || null]
+            `INSERT INTO tenants (name, domain, phone, status)
+             VALUES ($1, $2, $3, 'active')
+             RETURNING id, name, domain, phone`,
+            [name, domain || null, cleanPhone]
           );
           tenant = tenantResult.rows[0];
         } catch (pgErr) {
@@ -707,10 +755,11 @@ export const authController = {
         );
 
         // C. Seed settings, ledger accounts, and starter subscription
-        await seedNewTenant(client, tenantId, name, email, {
+        await seedNewTenant(client, tenantId, name, cleanEmail, {
           address: address || '',
           website: website || '',
-          extraInfo: extraInfo || ''
+          extraInfo: extraInfo || '',
+          phone: cleanPhone || ''
         });
 
         return { tenant, user: { id: userId, email: req.user.email } };
