@@ -164,7 +164,9 @@ export const vendorController = {
 
     try {
       const clientId = process.env.RAZORPAY_KEY_ID || 'rzp_test_mockkey';
-      const redirectUri = process.env.RAZORPAY_CALLBACK_URL || 'http://localhost:5000/api/v1/vendors/oauth/callback';
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.get('host');
+      const redirectUri = process.env.RAZORPAY_CALLBACK_URL || `${protocol}://${host}/api/v1/vendors/oauth/callback`;
       const state = `${req.tenantId}:${vendorId}`;
 
       const isMock = !process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID.startsWith('rzp_test_mockkey');
@@ -200,7 +202,9 @@ export const vendorController = {
         throw new Error('Invalid state payload');
       }
 
-      const redirectUri = process.env.RAZORPAY_CALLBACK_URL || 'http://localhost:5000/api/v1/vendors/oauth/callback';
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.get('host');
+      const redirectUri = process.env.RAZORPAY_CALLBACK_URL || `${protocol}://${host}/api/v1/vendors/oauth/callback`;
       const oauthResult = await razorpayService.exchangeOAuthCode(code, redirectUri);
 
       await runInTransaction(tenantId, async (client) => {

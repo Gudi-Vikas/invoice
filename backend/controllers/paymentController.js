@@ -9,8 +9,9 @@ export const paymentController = {
     try {
       const clientId = process.env.RAZORPAY_KEY_ID || 'rzp_test_mockkey';
       
-      // Build callback dynamically so it works in both dev (localhost) and production
-      const redirectUri = `${req.protocol}://${req.get('host')}/api/v1/payments/razorpay/oauth/callback`;
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.get('host');
+      const redirectUri = process.env.RAZORPAY_CALLBACK_URL || `${protocol}://${host}/api/v1/payments/razorpay/oauth/callback`;
       const state = `tenant:${req.tenantId}`;
 
       const isMock = !process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID.startsWith('rzp_test_mockkey');
@@ -47,7 +48,9 @@ export const paymentController = {
         throw new Error('Invalid state payload');
       }
 
-      const redirectUri = `${req.protocol}://${req.get('host')}/api/v1/payments/razorpay/oauth/callback`;
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.get('host');
+      const redirectUri = process.env.RAZORPAY_CALLBACK_URL || `${protocol}://${host}/api/v1/payments/razorpay/oauth/callback`;
       const oauthResult = await razorpayService.exchangeOAuthCode(code, redirectUri);
 
       await runInTransaction(tenantId, async (client) => {
