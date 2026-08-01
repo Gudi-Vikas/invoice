@@ -421,7 +421,7 @@ export const Settings = () => {
                 </span>
                 {settings.business_info.logoUrl && (
                   <div style={{ marginTop: '0.75rem', padding: '0.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', display: 'inline-block' }}>
-                    <img src={settings.business_info.logoUrl} alt="Logo Preview" style={{ maxHeight: '45px', display: 'block' }} onError={(e) => e.target.style.display = 'none'} />
+                    <img src={settings.business_info.logoUrl} alt="Logo Preview" style={{ maxHeight: '60px', maxWidth: '200px', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block' }} onError={(e) => e.target.style.display = 'none'} />
                   </div>
                 )}
               </div>

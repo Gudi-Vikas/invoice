@@ -1116,7 +1116,11 @@ h6 {
 }
 
 .invoice-logo {
-  max-height: 50px !important;
+  max-height: 68px !important;
+  max-width: 240px !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
   margin-bottom: 0.5rem !important;
   display: block !important;
 }
