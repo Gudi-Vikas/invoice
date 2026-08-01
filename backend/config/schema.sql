@@ -338,12 +338,15 @@
     CREATE INDEX IF NOT EXISTS idx_ledger_entries_transaction ON ledger_entries(transaction_id);
     CREATE INDEX IF NOT EXISTS idx_ledger_entries_account ON ledger_entries(account_id);
     CREATE INDEX IF NOT EXISTS idx_documents_rzp_order ON documents(razorpay_order_id);
+    CREATE INDEX IF NOT EXISTS idx_documents_tenant_created ON documents(tenant_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_documents_client_id ON documents(client_id);
     -- Platform billing indexes
     CREATE INDEX IF NOT EXISTS idx_platform_billing_tenant  ON platform_billing_invoices(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_platform_billing_status  ON platform_billing_invoices(status);
     CREATE INDEX IF NOT EXISTS idx_platform_billing_created ON platform_billing_invoices(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_notifications_tenant ON notifications(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);
 
 
     -- =========================================================================

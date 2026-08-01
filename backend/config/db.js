@@ -16,11 +16,16 @@ const sslConfig = process.env.DATABASE_URL?.includes('aiven')
       ca: fs.readFileSync(path.join(__dirname, 'ca.pem')).toString(),
       rejectUnauthorized: true,
     }
-  : false;
+  : (process.env.NODE_ENV === 'production' || process.env.DATABASE_URL?.includes('render.com') || process.env.DATABASE_URL?.includes('sslmode=require')
+      ? { rejectUnauthorized: false }
+      : false);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/invoice_db',
   ssl: sslConfig,
+  max: parseInt(process.env.DB_POOL_MAX || '20', 10),
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
 pool.on('error', (err) => {
