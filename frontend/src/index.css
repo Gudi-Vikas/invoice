@@ -908,45 +908,12 @@ h6 {
   }
 
   #print-area.invoice-container {
-    border: 5px solid var(--doc-accent, #234a75) !important;
     padding: 2.5rem !important;
-    border-radius: 4px !important;
   }
 
-  /* Force table cells to render clean white backgrounds */
+  /* Force table layout for print */
   #print-area table {
     width: 100% !important;
-    border-collapse: collapse !important;
-  }
-
-  #print-area table th,
-  #print-area table td {
-    background: #ffffff !important;
-    color: #111111 !important;
-    border-bottom: 1px solid #eaeaea !important;
-  }
-
-  /* Preserve corporate invoice styles on print */
-  #print-area table.invoice-table th {
-    background-color: var(--doc-accent, #234a75) !important;
-    color: var(--doc-contrast, #ffffff) !important;
-  }
-
-  #print-area table.invoice-table td {
-    background-color: #ffffff !important;
-    color: #1e293b !important;
-    border-bottom: 1px solid #cbd5e1 !important;
-  }
-
-  #print-area .invoice-address-header {
-    background-color: var(--doc-accent, #234a75) !important;
-    color: var(--doc-contrast, #ffffff) !important;
-  }
-
-  #print-area .invoice-address-body {
-    background-color: var(--doc-accent, #234a75) !important;
-    filter: brightness(0.92);
-    color: var(--doc-contrast, #ffffff) !important;
   }
 
   /* Remove glassmorphism styling on print cards */
@@ -1093,7 +1060,7 @@ h6 {
   background-color: #ffffff !important;
   color: #1e293b !important;
   padding: 3rem !important;
-  border: none !important;
+  border: 5px solid var(--doc-accent, var(--theme-color, #234a75));
   border-radius: 4px !important;
   max-width: 850px !important;
   margin: 0 auto !important;

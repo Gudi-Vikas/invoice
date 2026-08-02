@@ -19,8 +19,18 @@ import subscriptionRoutes from './routes/subscriptions.js';
 import masterRoutes from './routes/master.js';
 import paymentRoutes from './routes/payments.js';
 import notificationRoutes from './routes/notifications.js';
+import settingsController from './controllers/settingsController.js';
 
-dotenv.config();
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+if (!process.env.JWT_SECRET) {
+  dotenv.config();
+}
 
 if (!process.env.JWT_SECRET) {
   throw new Error("FATAL: JWT_SECRET environment variable is missing.");
@@ -101,6 +111,9 @@ app.use('/api/v1/subscriptions', subscriptionRoutes);
 app.use('/api/v1/master', masterRoutes);  // Platform Owner Control Plane
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+
+// Gmail OAuth callback route alias (supports both unversioned /api/settings and /api/v1/settings)
+app.get('/api/settings/gmail/callback', settingsController.handleGmailCallback);
 
 // Webhook listener endpoints
 app.use('/api/webhooks', webhookRoutes);

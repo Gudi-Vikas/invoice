@@ -36,7 +36,7 @@ export const DocumentTemplate = ({
   const contrastColor = getContrastColor(color);
 
   return (
-    <div id="print-area" className={`invoice-container theme-${theme}`} style={{ '--doc-accent': color, '--doc-contrast': contrastColor }}>
+    <div id="print-area" className={`invoice-container theme-${theme}`} style={{ '--doc-accent': color, '--doc-contrast': contrastColor, '--theme-color': color, '--theme-contrast': contrastColor, borderColor: color }}>
       {/* Header */}
       <div className="invoice-header">
         <div className="invoice-logo-container">

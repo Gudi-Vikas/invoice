@@ -111,7 +111,7 @@ export const PlatformInvoiceVisualizer = ({
       )}
 
       {/* Print-Only PDF Container */}
-      <div id="print-area" className={`invoice-container theme-${themeDesign}`} style={{ '--theme-color': themeColor, '--theme-contrast': contrastColor, borderColor: themeColor }}>
+      <div id="print-area" className={`invoice-container theme-${themeDesign}`} style={{ '--doc-accent': themeColor, '--doc-contrast': contrastColor, '--theme-color': themeColor, '--theme-contrast': contrastColor, borderColor: themeColor }}>
         {/* Header */}
         <div className="invoice-header">
           <div className="invoice-logo-container">

@@ -782,7 +782,8 @@ export const documentController = {
           to: doc.client_email,
           subject,
           body,
-          html
+          html,
+          smtpConfig: emailTemplates.smtp || null
         });
 
         return {

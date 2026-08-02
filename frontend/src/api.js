@@ -72,6 +72,9 @@ export const api = {
   },
   getTenantOAuthUrl: () => request('/payments/razorpay/oauth-url'),
   disconnectTenantRazorpay: () => request('/payments/razorpay/disconnect', { method: 'POST' }),
+  getGmailOAuthUrl: () => request('/settings/gmail/connect-url'),
+  disconnectGmail: () => request('/settings/gmail/disconnect', { method: 'POST' }),
+
 
   // ── Clients ────────────────────────────────────────────────────────────
   getClients: (params = {}) => {

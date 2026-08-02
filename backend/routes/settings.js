@@ -32,12 +32,18 @@ const upload = multer({
   }
 });
 
-// Apply auth middleware to protect settings routes
+// Public OAuth callback route from Google (no JWT bearer token sent by Google)
+router.get('/gmail/callback', settingsController.handleGmailCallback);
+
+// Apply auth middleware to protect tenant settings routes
 router.use(authenticateToken);
 router.use(requireTenant);
 
 router.get('/', settingsController.getSettings);
+router.get('/gmail/connect-url', settingsController.getGmailAuthUrl);
+router.post('/gmail/disconnect', settingsController.disconnectGmail);
 router.post('/logo', upload.single('logo'), settingsController.uploadLogo);
 router.put('/:category', settingsController.updateSettings);
 
 export default router;
+

@@ -111,15 +111,29 @@ export const MasterSettings = () => {
     { id: 'tax', label: 'Tax Settings' }
   ];
 
+  const isInclusive = settings?.tax_config?.pricesInclusiveOfTax === true;
+  const taxPct = settings?.tax_config?.defaultTaxPercentage || 18.00;
+  const rawPrice = 999.00;
+
+  const dummyAmount = isInclusive
+    ? parseFloat((rawPrice / (1 + taxPct / 100)).toFixed(2))
+    : rawPrice;
+  const dummyTax = isInclusive
+    ? parseFloat((rawPrice - dummyAmount).toFixed(2))
+    : parseFloat(((rawPrice * taxPct) / 100).toFixed(2));
+  const dummyTotal = isInclusive
+    ? rawPrice
+    : parseFloat((dummyAmount + dummyTax).toFixed(2));
+
   const dummyPlatformInvoice = {
     invoice_number: `${settings?.invoice_config?.prefix || 'UKEY-BILL-'}202608-0001${settings?.invoice_config?.suffix || ''}`,
     created_at: new Date().toISOString(),
     due_date: new Date(Date.now() + (settings?.invoice_config?.dueDateDays || 15) * 86400000).toISOString(),
     status: 'pending',
-    amount: 999.00,
-    tax_percentage: settings?.tax_config?.defaultTaxPercentage || 18.00,
-    tax_amount: (999.00 * (settings?.tax_config?.defaultTaxPercentage || 18.00)) / 100,
-    total_amount: 999.00 + (999.00 * (settings?.tax_config?.defaultTaxPercentage || 18.00)) / 100,
+    amount: dummyAmount,
+    tax_percentage: taxPct,
+    tax_amount: dummyTax,
+    total_amount: dummyTotal,
     plan_name: 'Pro Subscription Plan',
     billing_period_start: new Date().toISOString(),
     billing_period_end: new Date(Date.now() + 30 * 86400000).toISOString(),

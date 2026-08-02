@@ -31,15 +31,25 @@ export const downloadElementAsPdf = async (elementId, filename = 'document.pdf')
       useCORS: true, 
       logging: false,
       scrollY: 0,
+      scrollX: 0,
+      windowWidth: 800,
       onclone: (clonedDoc) => {
         const el = clonedDoc.getElementById(elementId);
         if (el) {
-          el.style.margin = '0';
+          // Isolate element into cloned body to remove any outer modal flex/centering offset
+          clonedDoc.body.innerHTML = '';
+          clonedDoc.body.style.margin = '0';
+          clonedDoc.body.style.padding = '0';
+          clonedDoc.body.style.background = '#ffffff';
+          clonedDoc.body.appendChild(el);
+
+          // Reset positioning and width to standard A4 printable dimensions (794px = A4 @ 96DPI)
+          el.style.margin = '0 auto';
           el.style.boxShadow = 'none';
-          el.style.border = 'none';
-          el.style.width = '850px';
-          el.style.maxWidth = '850px';
           el.style.transform = 'none';
+          el.style.width = '794px';
+          el.style.maxWidth = '794px';
+          el.style.boxSizing = 'border-box';
         }
       }
     },

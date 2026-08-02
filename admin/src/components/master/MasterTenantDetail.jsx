@@ -22,6 +22,7 @@ export const MasterTenantDetail = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [confirmDeleteText, setConfirmDeleteText] = useState('');
   const [subOverride, setSubOverride] = useState({ planId: '', status: '', currentPeriodEnd: '' });
 
   // Billing generation and user invitation state
@@ -524,16 +525,43 @@ export const MasterTenantDetail = () => {
       {showDeleteModal && (
         <ModalPortal>
           <div className="modal-overlay">
-            <div className="glass-card modal-card" style={{ '--modal-width': '440px' }}>
-              <h3 style={{ color: 'var(--accent-danger)', marginBottom: '1rem' }}>
-                <ShieldAlert size={18} style={{ verticalAlign: 'middle' }} /> Permanently Delete Tenant
+            <div className="glass-card modal-card" style={{ '--modal-width': '460px', padding: '1.75rem' }}>
+              <h3 style={{ color: 'var(--accent-danger)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}>
+                <ShieldAlert size={20} /> Permanently Delete Tenant
               </h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-                This will permanently delete <strong>{tenant.name}</strong> and all associated data. This action <strong>cannot be undone</strong>.
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.25rem', lineHeight: '1.5' }}>
+                This will permanently delete <strong>{tenant.name}</strong> and all associated workspace data (users, invoices, quotes, transactions, vendors). This action <strong>cannot be undone</strong>.
               </p>
+
+              <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '10px' }}>
+                <label className="form-label" style={{ fontSize: '0.82rem', color: 'var(--accent-danger)', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>
+                  To confirm, type <strong>DELETE</strong> or <strong>{tenant.name}</strong> below:
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder={`Type DELETE or ${tenant.name}`}
+                  value={confirmDeleteText}
+                  onChange={(e) => setConfirmDeleteText(e.target.value)}
+                  style={{ fontFamily: 'monospace', fontSize: '0.9rem', width: '100%' }}
+                  autoFocus
+                />
+              </div>
+
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                <button className="btn btn-secondary" onClick={() => setShowDeleteModal(false)}>Cancel</button>
-                <button className="btn btn-danger" onClick={handleDelete} disabled={actionInProgress} style={{ opacity: actionInProgress ? 0.7 : 1 }}>
+                <button className="btn btn-secondary" onClick={() => { setShowDeleteModal(false); setConfirmDeleteText(''); }}>Cancel</button>
+                <button
+                  className="btn btn-danger"
+                  onClick={handleDelete}
+                  disabled={actionInProgress || (confirmDeleteText.trim().toUpperCase() !== 'DELETE' && confirmDeleteText.trim() !== tenant.name)}
+                  style={{
+                    opacity: (actionInProgress || (confirmDeleteText.trim().toUpperCase() !== 'DELETE' && confirmDeleteText.trim() !== tenant.name)) ? 0.45 : 1,
+                    cursor: (confirmDeleteText.trim().toUpperCase() !== 'DELETE' && confirmDeleteText.trim() !== tenant.name) ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
                   <Trash2 size={14} /> {actionInProgress ? 'Deleting...' : 'Delete Forever'}
                 </button>
               </div>

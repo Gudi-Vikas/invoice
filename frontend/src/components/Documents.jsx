@@ -710,7 +710,7 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
                 Client <strong>{verifyingDoc.client_name}</strong> has submitted payment proof for document <strong>{verifyingDoc.document_number}</strong>.
               </p>
               
-              <div style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr' }}>
                   <span style={{ fontWeight: 600 }}>Amount Due:</span>
                   <span style={{ color: 'var(--accent-primary)', fontWeight: 700 }}>{currencySymbol}{parseFloat(verifyingDoc.total_due).toFixed(2)}</span>
@@ -721,7 +721,7 @@ export const Documents = ({ defaultType = 'invoice', initialView = 'list' }) => 
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr' }}>
                   <span style={{ fontWeight: 600 }}>Reference UTR:</span>
-                  <span style={{ fontFamily: 'monospace', fontSize: '1rem', color: '#1e293b', fontWeight: 600 }}>{verifyingDoc.offline_payment_info?.reference || 'N/A'}</span>
+                  <span style={{ fontFamily: 'monospace', fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 700, letterSpacing: '0.03em' }}>{verifyingDoc.offline_payment_info?.reference || 'N/A'}</span>
                 </div>
                 {verifyingDoc.offline_payment_info?.notes && (
                   <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr' }}>

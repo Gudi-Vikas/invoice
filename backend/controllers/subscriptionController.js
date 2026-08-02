@@ -141,9 +141,19 @@ export const subscriptionController = {
         );
         const email = adminRes.rows[0]?.email || 'billing@tenant.local';
 
-        // C. Create a Razorpay order for the plan amount
+        // C. Load platform tax settings & calculate payable amount
+        const ps = await client.query('SELECT tax_config FROM platform_settings WHERE id = 1');
+        const taxConfig = ps.rows[0]?.tax_config || {};
+        const isInclusive = taxConfig.pricesInclusiveOfTax === true;
+        const taxPct = parseFloat(taxConfig.defaultTaxPercentage ?? 18.00);
+
+        const basePrice = parseFloat(plan.price_monthly);
+        const payableAmount = isInclusive
+          ? basePrice
+          : parseFloat((basePrice * (1 + taxPct / 100)).toFixed(2));
+
         const rzpOrder = await razorpayService.createOrder({
-          amountInRupees: plan.price_monthly,
+          amountInRupees: payableAmount,
           receipt: `sub_${req.tenantId.slice(0, 8)}_${Date.now()}`,
           notes: {
             tenant_id: req.tenantId,
@@ -180,7 +190,7 @@ export const subscriptionController = {
           keyId: process.env.RAZORPAY_KEY_ID || 'rzp_test_mockkey',
           mockMode: razorpayService.isMockMode,
           planName: plan.name,
-          amount: plan.price_monthly,
+          amount: payableAmount,
           adminEmail: email
         };
       });

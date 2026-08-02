@@ -85,14 +85,21 @@ export const Settings = () => {
     }
 
     if (oauthParam === 'success') {
-      setFeedback({ type: 'success', message: 'Razorpay account connected successfully via OAuth!' });
-      window.history.replaceState({}, document.title, window.location.pathname + '?tab=payments');
+      const msg = tabParam === 'emails' 
+        ? 'Gmail account connected successfully via Google OAuth!' 
+        : 'Razorpay account connected successfully via OAuth!';
+      setFeedback({ type: 'success', message: msg });
+      window.history.replaceState({}, document.title, window.location.pathname + `?tab=${tabParam || 'general'}`);
       fetchSettings();
     } else if (oauthParam === 'error') {
-      setFeedback({ type: 'error', message: `Razorpay connection failed: ${messageParam || 'Unknown error'}` });
-      window.history.replaceState({}, document.title, window.location.pathname + '?tab=payments');
+      const msg = tabParam === 'emails'
+        ? `Gmail OAuth connection failed: ${messageParam || 'Unknown error'}`
+        : `Razorpay connection failed: ${messageParam || 'Unknown error'}`;
+      setFeedback({ type: 'error', message: msg });
+      window.history.replaceState({}, document.title, window.location.pathname + `?tab=${tabParam || 'general'}`);
     }
   }, [fetchSettings]);
+
 
 
   // Real-time Pipe Delimited String Parser
@@ -168,7 +175,7 @@ export const Settings = () => {
       [block]: {
         ...prev[block],
         [parentKey]: {
-          ...prev[block][parentKey],
+          ...(prev[block][parentKey] || {}),
           [key]: value
         }
       }
@@ -192,6 +199,37 @@ export const Settings = () => {
     } finally {
       setLogoUploading(false);
       event.target.value = '';
+    }
+  };
+
+  const handleConnectGmail = async () => {
+    setFeedback({ type: '', message: '' });
+    try {
+      const { authorizeUrl } = await api.getGmailOAuthUrl();
+      if (authorizeUrl) {
+        window.location.href = authorizeUrl;
+      }
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to initialize Gmail Google OAuth.' });
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    setFeedback({ type: '', message: '' });
+    const isConfirmed = await confirm({
+      title: 'Disconnect Gmail',
+      message: 'Are you sure you want to disconnect your Google Gmail account? Custom email delivery via Gmail will be disabled.'
+    });
+    if (!isConfirmed) {
+      return;
+    }
+    try {
+      await api.disconnectGmail();
+      setFeedback({ type: 'success', message: 'Gmail account disconnected successfully.' });
+      fetchSettings();
+      refreshSettings();
+    } catch (err) {
+      setFeedback({ type: 'error', message: err.message || 'Failed to disconnect Gmail account.' });
     }
   };
 
@@ -1089,13 +1127,173 @@ export const Settings = () => {
         {/* ==================== 7. EMAILS TEMPLATES ==================== */}
         {activeTab === 'emails' && (
           <div>
+            <h3 style={{ fontSize: '1.25rem', marginBottom: '1.5rem' }}>Custom Email Delivery</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+              Configure your own email account to send invoices and quotes directly from your address.
+            </p>
+
+            {/* Standalone 1-Click Gmail Google OAuth Connection Box */}
+            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1.25rem 1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.3rem' }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                    </svg>
+                    <h4 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0 }}>Connect with Gmail (Google OAuth)</h4>
+                  </div>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
+                    Fastest way to send emails. Authorize with Google 1-click — no App Passwords required.
+                  </p>
+                </div>
+
+                <div>
+                  {settings.email_templates?.smtp?.gmailOAuth?.connected ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid var(--accent-success)', color: 'var(--accent-success)', padding: '0.35rem 0.75rem', borderRadius: '20px', fontSize: '0.82rem', fontWeight: 600 }}>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-success)' }} />
+                        Connected ({settings.email_templates?.smtp?.gmailOAuth?.userEmail})
+                      </div>
+                      <button type="button" className="btn btn-secondary" onClick={handleDisconnectGmail} style={{ borderColor: 'var(--accent-danger)', color: 'var(--accent-danger)', padding: '0.4rem 0.8rem', fontSize: '0.82rem' }}>
+                        Disconnect Gmail
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="button" className="btn btn-primary" onClick={handleConnectGmail} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                      </svg>
+                      Connect to Gmail
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1.5rem', borderRadius: '12px', border: '1px solid var(--border-color)', marginBottom: '2rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Email Provider (Manual SMTP)</label>
+                  <select 
+                    className="form-select"
+                    value={settings.email_templates?.smtp?.provider || 'none'}
+                    onChange={(e) => updateSubSettingState('email_templates', 'smtp', 'provider', e.target.value)}
+                  >
+                    <option value="none">Platform Default (Do not use custom email)</option>
+                    <option value="gmail">Gmail (App Password)</option>
+                    <option value="outlook">Outlook / Hotmail</option>
+                    <option value="yahoo">Yahoo</option>
+                    <option value="custom">Custom / Other</option>
+                  </select>
+                </div>
+                
+                {settings.email_templates?.smtp?.provider && settings.email_templates?.smtp?.provider !== 'none' && (
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">From Name</label>
+                      <input 
+                        type="text" 
+                        className="form-input"
+                        placeholder="e.g. John's Business"
+                        value={settings.email_templates?.smtp?.fromName || ''}
+                        onChange={(e) => updateSubSettingState('email_templates', 'smtp', 'fromName', e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {settings.email_templates?.smtp?.provider && settings.email_templates?.smtp?.provider !== 'none' && settings.email_templates?.smtp?.provider !== 'gmail_oauth' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Email Address</label>
+                    <input 
+                      type="email" 
+                      className="form-input"
+                      placeholder="your-email@provider.com"
+                      value={settings.email_templates?.smtp?.user || ''}
+                      onChange={(e) => updateSubSettingState('email_templates', 'smtp', 'user', e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">App Password</label>
+                    <input 
+                      type="password" 
+                      className="form-input"
+                      placeholder="Enter App Password"
+                      value={settings.email_templates?.smtp?.pass || ''}
+                      onChange={(e) => updateSubSettingState('email_templates', 'smtp', 'pass', e.target.value)}
+                    />
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '4px' }}>
+                      Do not use your main password. Create an <strong>App Password</strong> in your email security settings.
+                      {' '}
+                      {settings.email_templates?.smtp?.provider === 'gmail' && (
+                        <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }}>How to get a Gmail App Password?</a>
+                      )}
+                      {settings.email_templates?.smtp?.provider === 'outlook' && (
+                        <a href="https://support.microsoft.com/en-us/account-billing/using-app-passwords-with-apps-that-don-t-support-two-step-verification-5896ed9b-4263-e681-128a-a6f2979a7944" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }}>How to get an Outlook App Password?</a>
+                      )}
+                      {settings.email_templates?.smtp?.provider === 'yahoo' && (
+                        <a href="https://help.yahoo.com/kb/generate-and-manage-third-party-app-passwords-sln15241.html" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-primary)', textDecoration: 'underline' }}>How to get a Yahoo App Password?</a>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+
+
+              {settings.email_templates?.smtp?.provider === 'custom' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '1.5rem', marginTop: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">SMTP Host</label>
+                    <input 
+                      type="text" 
+                      className="form-input"
+                      placeholder="e.g. smtp.mailtrap.io"
+                      value={settings.email_templates?.smtp?.host || ''}
+                      onChange={(e) => updateSubSettingState('email_templates', 'smtp', 'host', e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">SMTP Port</label>
+                    <input 
+                      type="number" 
+                      className="form-input"
+                      placeholder="587"
+                      value={settings.email_templates?.smtp?.port || ''}
+                      onChange={(e) => updateSubSettingState('email_templates', 'smtp', 'port', parseInt(e.target.value, 10))}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Secure (SSL)</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.75rem', cursor: 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={settings.email_templates?.smtp?.secure === true}
+                        onChange={(e) => updateSubSettingState('email_templates', 'smtp', 'secure', e.target.checked)}
+                        style={{ width: '18px', height: '18px' }}
+                      />
+                      <span>Yes</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <h3 style={{ fontSize: '1.25rem', marginBottom: '1.5rem' }}>Automated Communication Templates</h3>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 3fr', gap: '1.5rem' }}>
               {/* Vertical sub-selector — FUNCTIONAL: clicking a trigger key switches the active template */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                 <span className="form-label">Mail Triggers</span>
-                {Object.keys(settings.email_templates).map(key => (
+                {Object.keys(settings.email_templates).filter(key => key !== 'smtp').map(key => (
                   <button
                     key={key}
                     className="btn btn-secondary"

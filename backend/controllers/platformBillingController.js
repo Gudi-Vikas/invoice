@@ -35,15 +35,38 @@ const generateInvoiceNumber = async (client) => {
   return `${prefix}-${seqStr}`;
 };
 
-export const createPlatformInvoice = async (client, { tenantId, planId, amount, taxPercentage = 18.00, razorpayOrderId, razorpayPaymentId, status = 'paid' }) => {
+export const createPlatformInvoice = async (client, { tenantId, planId, amount, taxPercentage, pricesInclusiveOfTax, razorpayOrderId, razorpayPaymentId, status = 'paid' }) => {
   const invoiceNumber = await generateInvoiceNumber(client);
   const now = new Date();
   const billingPeriodStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const billingPeriodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const planAmount = parseFloat(amount);
-  const taxPct = parseFloat(taxPercentage);
-  const taxAmount = parseFloat(((planAmount * taxPct) / 100).toFixed(4));
-  const totalAmount = parseFloat((planAmount + taxAmount).toFixed(4));
+
+  let isInclusive = pricesInclusiveOfTax;
+  let taxPct = parseFloat(taxPercentage || 18.00);
+
+  if (isInclusive === undefined || isInclusive === null || taxPercentage === undefined || taxPercentage === null) {
+    const ps = await client.query('SELECT tax_config FROM platform_settings WHERE id = 1');
+    const taxConfig = ps.rows[0]?.tax_config || {};
+    if (isInclusive === undefined || isInclusive === null) {
+      isInclusive = taxConfig.pricesInclusiveOfTax === true;
+    }
+    if (taxPercentage === undefined || taxPercentage === null) {
+      taxPct = parseFloat(taxConfig.defaultTaxPercentage ?? 18.00);
+    }
+  }
+
+  const rawAmount = parseFloat(amount);
+  let planAmount, taxAmount, totalAmount;
+
+  if (isInclusive) {
+    totalAmount = parseFloat(rawAmount.toFixed(4));
+    planAmount = parseFloat((totalAmount / (1 + taxPct / 100)).toFixed(4));
+    taxAmount = parseFloat((totalAmount - planAmount).toFixed(4));
+  } else {
+    planAmount = parseFloat(rawAmount.toFixed(4));
+    taxAmount = parseFloat(((planAmount * taxPct) / 100).toFixed(4));
+    totalAmount = parseFloat((planAmount + taxAmount).toFixed(4));
+  }
 
   const insertRes = await client.query(
     `INSERT INTO platform_billing_invoices
@@ -137,9 +160,15 @@ export const platformBillingController = {
 
     try {
       const invoice = await runWithoutRLS(async (client) => {
+        let isInclusive = req.body.pricesInclusiveOfTax;
+        const ps = await client.query('SELECT tax_config FROM platform_settings WHERE id = 1');
+        const taxConfig = ps.rows[0]?.tax_config || {};
+
         if (taxPercentage === undefined || taxPercentage === null) {
-          const ps = await client.query('SELECT tax_config FROM platform_settings WHERE id = 1');
-          taxPercentage = ps.rows[0]?.tax_config?.defaultTaxPercentage ?? 18.00;
+          taxPercentage = taxConfig.defaultTaxPercentage ?? 18.00;
+        }
+        if (isInclusive === undefined || isInclusive === null) {
+          isInclusive = taxConfig.pricesInclusiveOfTax === true;
         }
 
         // A. Verify tenant exists
@@ -194,10 +223,19 @@ export const platformBillingController = {
           planAmount = parseFloat(planRes.rows[0].price_monthly);
         }
 
-        // C. Calculate tax using NUMERIC(15,4) precision — all in JS integer-safe math
+        // C. Calculate tax using NUMERIC(15,4) precision
         const taxPct = parseFloat(taxPercentage);
-        const taxAmount = parseFloat(((planAmount * taxPct) / 100).toFixed(4));
-        const totalAmount = parseFloat((planAmount + taxAmount).toFixed(4));
+        let planBaseAmount, taxAmount, totalAmount;
+
+        if (isInclusive) {
+          totalAmount = parseFloat(planAmount.toFixed(4));
+          planBaseAmount = parseFloat((totalAmount / (1 + taxPct / 100)).toFixed(4));
+          taxAmount = parseFloat((totalAmount - planBaseAmount).toFixed(4));
+        } else {
+          planBaseAmount = parseFloat(planAmount.toFixed(4));
+          taxAmount = parseFloat(((planBaseAmount * taxPct) / 100).toFixed(4));
+          totalAmount = parseFloat((planBaseAmount + taxAmount).toFixed(4));
+        }
 
         // D. Generate invoice number (idempotency guard via DB UNIQUE on invoice_number)
         const invoiceNumber = await generateInvoiceNumber(client);
@@ -212,7 +250,7 @@ export const platformBillingController = {
           [
             tenantId, resolvedPlanId, invoiceNumber,
             billingPeriodStart, billingPeriodEnd,
-            planAmount, taxPct, taxAmount, totalAmount,
+            planBaseAmount, taxPct, taxAmount, totalAmount,
             dueDate, notes || null, req.masterAdmin.id
           ]
         );

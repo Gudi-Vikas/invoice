@@ -132,13 +132,17 @@ export const MasterPlans = () => {
     }
   };
 
-  const handleArchive = async (plan) => {
-    if (!confirm(`Archive "${plan.name}"? It will be hidden from tenants but existing subscribers will keep their plan.`)) return;
-    if (archivingId) return;
-    setArchivingId(plan.id);
+  const [planToArchive, setPlanToArchive] = useState(null);
+  const [confirmArchiveText, setConfirmArchiveText] = useState('');
+
+  const handleConfirmArchive = async () => {
+    if (!planToArchive || archivingId) return;
+    setArchivingId(planToArchive.id);
     try {
-      const result = await api.masterArchivePlan(plan.id);
+      const result = await api.masterArchivePlan(planToArchive.id);
       showToast(result.message, 'success');
+      setPlanToArchive(null);
+      setConfirmArchiveText('');
       loadPlans();
     } catch (err) {
       showToast(err.message, 'error');
@@ -335,7 +339,7 @@ export const MasterPlans = () => {
                     <button
                       className="btn btn-danger"
                       style={{ flex: 1, fontSize: '0.82rem', padding: '0.5rem' }}
-                      onClick={() => handleArchive(plan)}
+                      onClick={() => { setPlanToArchive(plan); setConfirmArchiveText(''); }}
                       disabled={archivingId === plan.id}
                     >
                       <Archive size={13} /> {archivingId === plan.id ? 'Archiving...' : 'Archive'}
@@ -552,6 +556,55 @@ export const MasterPlans = () => {
             </div>
           </div>
         </div>
+        </ModalPortal>
+      )}
+
+      {/* Archive Modal */}
+      {planToArchive && (
+        <ModalPortal>
+          <div className="modal-overlay">
+            <div className="plan-card modal-card" style={{ '--modal-width': '460px', padding: '1.75rem' }}>
+              <h3 style={{ color: 'var(--accent-danger)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}>
+                <Archive size={20} /> Archive Subscription Plan
+              </h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.25rem', lineHeight: '1.5' }}>
+                Archiving <strong>{planToArchive.name}</strong> will hide it from new tenant signups. Existing subscribers will keep their current plan.
+              </p>
+
+              <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '10px' }}>
+                <label className="form-label" style={{ fontSize: '0.82rem', color: 'var(--accent-danger)', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>
+                  To confirm, type <strong>ARCHIVE</strong> below:
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Type ARCHIVE to confirm"
+                  value={confirmArchiveText}
+                  onChange={(e) => setConfirmArchiveText(e.target.value)}
+                  style={{ fontFamily: 'monospace', fontSize: '0.9rem', width: '100%' }}
+                  autoFocus
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => { setPlanToArchive(null); setConfirmArchiveText(''); }}>Cancel</button>
+                <button
+                  className="btn btn-danger"
+                  onClick={handleConfirmArchive}
+                  disabled={archivingId === planToArchive.id || confirmArchiveText.trim().toUpperCase() !== 'ARCHIVE'}
+                  style={{
+                    opacity: (archivingId === planToArchive.id || confirmArchiveText.trim().toUpperCase() !== 'ARCHIVE') ? 0.45 : 1,
+                    cursor: (confirmArchiveText.trim().toUpperCase() !== 'ARCHIVE') ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}
+                >
+                  <Archive size={14} /> {archivingId === planToArchive.id ? 'Archiving...' : 'Archive Plan'}
+                </button>
+              </div>
+            </div>
+          </div>
         </ModalPortal>
       )}
     </div>

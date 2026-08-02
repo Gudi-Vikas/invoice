@@ -26,7 +26,33 @@ export const downloadElementAsPdf = async (elementId, filename = 'document.pdf')
     margin:       [0.25, 0.25, 0.25, 0.25],
     filename:     filename,
     image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, useCORS: true, logging: false, scrollY: 0 },
+    html2canvas:  { 
+      scale: 2, 
+      useCORS: true, 
+      logging: false,
+      scrollY: 0,
+      scrollX: 0,
+      windowWidth: 800,
+      onclone: (clonedDoc) => {
+        const el = clonedDoc.getElementById(elementId);
+        if (el) {
+          // Isolate element into cloned body to remove any outer modal flex/centering offset
+          clonedDoc.body.innerHTML = '';
+          clonedDoc.body.style.margin = '0';
+          clonedDoc.body.style.padding = '0';
+          clonedDoc.body.style.background = '#ffffff';
+          clonedDoc.body.appendChild(el);
+
+          // Reset positioning and width to standard A4 printable dimensions (794px = A4 @ 96DPI)
+          el.style.margin = '0 auto';
+          el.style.boxShadow = 'none';
+          el.style.transform = 'none';
+          el.style.width = '794px';
+          el.style.maxWidth = '794px';
+          el.style.boxSizing = 'border-box';
+        }
+      }
+    },
     jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
   };
 

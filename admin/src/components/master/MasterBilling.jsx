@@ -31,6 +31,7 @@ export const MasterBilling = () => {
   // Modals
   const [showVoidModal, setShowVoidModal] = useState(null);
   const [voidReason, setVoidReason] = useState('');
+  const [confirmVoidText, setConfirmVoidText] = useState('');
   
   const [showMarkPaidModal, setShowMarkPaidModal] = useState(null);
   const [markPaidRef, setMarkPaidRef] = useState('');
@@ -383,12 +384,12 @@ export const MasterBilling = () => {
       {showVoidModal && (
         <ModalPortal>
           <div className="modal-overlay">
-            <div className="billing-card modal-card" style={{ '--modal-width': '480px' }}>
-              <h3 style={{ marginBottom: '1rem', color: 'var(--accent-danger)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <XCircle size={20} /> Void Invoice
+            <div className="billing-card modal-card" style={{ '--modal-width': '480px', padding: '1.75rem' }}>
+              <h3 style={{ marginBottom: '1rem', color: 'var(--accent-danger)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 700 }}>
+                <XCircle size={20} /> Void Platform Invoice
               </h3>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-                Voiding invoice <strong>{showVoidModal.invoice_number}</strong> will cancel it permanently.
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.25rem', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                Voiding invoice <strong>{showVoidModal.invoice_number}</strong> will permanently cancel collection for this bill. This action <strong>cannot be undone</strong>.
               </p>
               <form onSubmit={confirmVoid}>
                 <div className="form-group">
@@ -401,9 +402,36 @@ export const MasterBilling = () => {
                     onChange={e => setVoidReason(e.target.value)} 
                   />
                 </div>
+
+                <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '10px' }}>
+                  <label className="form-label" style={{ fontSize: '0.82rem', color: 'var(--accent-danger)', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>
+                    To confirm, type <strong>VOID</strong> below:
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Type VOID to confirm"
+                    value={confirmVoidText}
+                    onChange={(e) => setConfirmVoidText(e.target.value)}
+                    style={{ fontFamily: 'monospace', fontSize: '0.9rem', width: '100%' }}
+                    autoFocus
+                  />
+                </div>
+
                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
-                  <button type="button" className="btn btn-secondary" onClick={() => { setShowVoidModal(null); setVoidReason(''); }}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" disabled={actionInProgress === showVoidModal.id} style={{ backgroundColor: 'var(--accent-danger)', borderColor: 'var(--accent-danger)' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => { setShowVoidModal(null); setVoidReason(''); setConfirmVoidText(''); }}>Cancel</button>
+                  <button 
+                    type="submit" 
+                    className="btn btn-danger" 
+                    disabled={actionInProgress === showVoidModal.id || confirmVoidText.trim().toUpperCase() !== 'VOID'} 
+                    style={{ 
+                      opacity: (actionInProgress === showVoidModal.id || confirmVoidText.trim().toUpperCase() !== 'VOID') ? 0.45 : 1,
+                      cursor: (confirmVoidText.trim().toUpperCase() !== 'VOID') ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem'
+                    }}
+                  >
                     {actionInProgress === showVoidModal.id ? 'Voiding...' : 'Confirm Void'}
                   </button>
                 </div>
