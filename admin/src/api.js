@@ -126,9 +126,20 @@ export const api = {
   removeTeamUser: (id) =>
     request(`/auth/users/${id}`, { method: 'DELETE' }),
 
+  // ── Master Platform Settings ───────────────────────────────────────────
+  masterGetSettings: () => request('/master/settings'),
+  masterUpdateSettings: (category, data) =>
+    request(`/master/settings/${category}`, { method: 'PUT', body: JSON.stringify(data) }),
+  masterUploadLogo: (file) => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    return request('/master/settings/logo', { method: 'POST', body: formData });
+  },
+
   // ── Notification Badges & Feed ──────────────────────────────────────────────
   getMasterNotifications: () => request('/master/notifications')
 
 };
 
 export default api;
+

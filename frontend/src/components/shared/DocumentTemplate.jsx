@@ -1,4 +1,5 @@
 import { ShieldCheck } from 'lucide-react';
+import { getContrastColor } from '../../utils/colorUtils';
 
 export const DocumentTemplate = ({
   doc,
@@ -32,9 +33,10 @@ export const DocumentTemplate = ({
   
   const theme = previewTheme || config.templateDesign || 'default';
   const color = previewColor || config.templateColor || '#234a75';
+  const contrastColor = getContrastColor(color);
 
   return (
-    <div id="print-area" className={`invoice-container theme-${theme}`} style={{ '--doc-accent': color }}>
+    <div id="print-area" className={`invoice-container theme-${theme}`} style={{ '--doc-accent': color, '--doc-contrast': contrastColor }}>
       {/* Header */}
       <div className="invoice-header">
         <div className="invoice-logo-container">
@@ -119,7 +121,41 @@ export const DocumentTemplate = ({
           </div>
 
           <div className="invoice-payment-terms">
-            {config.termsAndConditions || (doc.type === 'quote' ? 'Quotation valid for 30 days.' : 'Payment is due within 14 days from date of invoice. Late payment is subject to fees of 5% per month.')}
+            {doc.status === 'paid' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-start' }}>
+                <span style={{ color: 'var(--accent-success)', fontWeight: 700, fontSize: '1.1rem' }}>
+                  PAID
+                </span>
+                {doc.offline_payment_info?.reference && (
+                  <div style={{ 
+                    backgroundColor: '#ffffff', 
+                    color: '#000000', 
+                    padding: '0.4rem 0.75rem', 
+                    borderRadius: '6px', 
+                    border: '1px solid #cbd5e1',
+                    fontSize: '1rem',
+                    fontWeight: 500
+                  }}>
+                    Ref/UTR: <strong style={{ color: '#000000', fontWeight: 800 }}>{doc.offline_payment_info.reference}</strong>
+                  </div>
+                )}
+                {doc.razorpay_payment_id && !doc.offline_payment_info?.reference && (
+                  <div style={{ 
+                    backgroundColor: '#ffffff', 
+                    color: '#000000', 
+                    padding: '0.4rem 0.75rem', 
+                    borderRadius: '6px', 
+                    border: '1px solid #cbd5e1',
+                    fontSize: '1rem',
+                    fontWeight: 500
+                  }}>
+                    Ref: <strong style={{ color: '#000000', fontWeight: 800 }}>{doc.razorpay_payment_id}</strong>
+                  </div>
+                )}
+              </div>
+            ) : (
+              config.termsAndConditions || (doc.type === 'quote' ? 'Quotation valid for 30 days.' : 'Payment is due within 14 days from date of invoice. Late payment is subject to fees of 5% per month.')
+            )}
           </div>
 
           {doc.type === 'invoice' && (

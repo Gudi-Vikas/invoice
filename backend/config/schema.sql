@@ -102,6 +102,17 @@
         last_seq INTEGER NOT NULL DEFAULT 0
     );
 
+    -- 7c. Platform Settings (Master Admin / Platform Owner configuration blocks)
+    CREATE TABLE IF NOT EXISTS platform_settings (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        business_info JSONB NOT NULL DEFAULT '{}'::jsonb,
+        invoice_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+        tax_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT single_row CHECK (id = 1)
+    );
+
+
 
     -- =========================================================================
     -- TENANT-SCOPED TABLES (Row-Level Security Enabled)
@@ -448,3 +459,11 @@
     ('b3310000-0000-0000-0000-000000000001', 'max_vendors',             2),
     ('b3310000-0000-0000-0000-000000000001', 'custom_branding',         1)
     ON CONFLICT DO NOTHING;
+
+    INSERT INTO platform_settings (id, business_info, invoice_config, tax_config) VALUES (
+        1,
+        '{"businessName": "Ultrakey IT Solutions Private Limited", "email": "billing@ultrakeyit.com", "phone": "+91 9876543210", "address": "Flat No. 204, 2nd Floor, Cyber Residency, Indira Nagar, Gachibowli, Hyderabad, Telangana, India-500032", "website": "https://ultrakeyit.com", "logoUrl": "", "extraInfo": "<b>GST No:</b> 36AADCU5062A1ZO"}'::jsonb,
+        '{"prefix": "UKEY-BILL-", "suffix": "", "nextNumber": 1, "dueDateDays": 15, "autoIncrement": true, "termsAndConditions": "Payment due within 15 days of invoice date. Late payments may result in workspace suspension.", "footerNotes": "Thank you for choosing Ultrakey SaaS platform.", "templateDesign": "default", "templateColor": "#7c3aed"}'::jsonb,
+        '{"defaultTaxPercentage": 18.00, "defaultTaxName": "GST", "pricesInclusiveOfTax": false, "currencySymbol": "₹", "thousandSeparator": ",", "decimalSeparator": "."}'::jsonb
+    ) ON CONFLICT (id) DO NOTHING;
+

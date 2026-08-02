@@ -1,9 +1,35 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import multer from 'multer';
 import { authenticateToken, requireMasterAdmin, requireMasterPermission } from '../middleware/auth.js';
 import masterAdminController from '../controllers/masterAdminController.js';
 import platformBillingController from '../controllers/platformBillingController.js';
 
 const router = express.Router();
+
+const logoUploadDir = path.resolve('uploads/logos');
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    fs.mkdirSync(logoUploadDir, { recursive: true });
+    cb(null, logoUploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.png';
+    cb(null, `platform-${Date.now()}${ext}`);
+  }
+});
+const logoUpload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) {
+      cb(new Error('Only image files can be uploaded as logos.'));
+      return;
+    }
+    cb(null, true);
+  }
+});
 
 // ── Shorthand for the auth + guard chain used on every protected route ───────
 const guard = [authenticateToken, requireMasterAdmin];
@@ -18,6 +44,20 @@ router.post('/login', masterAdminController.login);
 
 
 // ============================================================================
+//  MASTER ADMIN — PLATFORM SETTINGS
+// ============================================================================
+
+// GET /api/v1/master/settings
+router.get('/settings', ...guard, requireMasterPermission('settings'), masterAdminController.getPlatformSettings);
+
+// PUT /api/v1/master/settings/:category
+router.put('/settings/:category', ...guard, requireMasterPermission('settings'), masterAdminController.updatePlatformSettings);
+
+// POST /api/v1/master/settings/logo
+router.post('/settings/logo', ...guard, requireMasterPermission('settings'), logoUpload.single('logo'), masterAdminController.uploadPlatformLogo);
+
+
+// ============================================================================
 //  MASTER ADMIN — PLATFORM DASHBOARD
 // ============================================================================
 
@@ -28,6 +68,7 @@ router.get('/dashboard', ...guard, requireMasterPermission('dashboard'), masterA
 // GET /api/v1/master/notifications
 // Sidebar badge counts: new tenants, inactive tenants, overdue + pending billing invoices.
 router.get('/notifications', ...guard, masterAdminController.getMasterNotifications);
+
 
 
 // ============================================================================

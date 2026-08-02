@@ -41,6 +41,7 @@ export const SubscriptionPage = () => {
   const [checkingOut, setCheckingOut] = useState(null);
   
   const [invoices, setInvoices] = useState([]);
+  const [platformSettings, setPlatformSettings] = useState(null);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [payingInvoice, setPayingInvoice] = useState(null);
   const [viewingInvoice, setViewingInvoice] = useState(null);
@@ -62,7 +63,13 @@ export const SubscriptionPage = () => {
   const loadInvoices = useCallback(async () => {
     try {
       const data = await api.getPlatformInvoices();
-      setInvoices(data || []);
+      if (data && data.invoices) {
+        setInvoices(data.invoices);
+        setPlatformSettings(data.platformSettings);
+      } else {
+        // Fallback if backend hasn't updated or returns old format
+        setInvoices(Array.isArray(data) ? data : []);
+      }
     } catch {
       showToast('Failed to load billing invoices.', 'error');
     } finally {
@@ -226,6 +233,9 @@ export const SubscriptionPage = () => {
           onPay={() => handlePayInvoice(viewingInvoice)}
           isPaying={payingInvoice === viewingInvoice.id}
           showPayButton={true}
+          businessInfo={platformSettings?.business_info}
+          invoiceConfig={platformSettings?.invoice_config}
+          taxConfig={platformSettings?.tax_config}
         />
       </div>
     );
@@ -486,7 +496,9 @@ export const SubscriptionPage = () => {
                     <th>Plan</th>
                     <th>Billing Period</th>
                     <th>Due Date</th>
-                    <th style={{ textAlign: 'right' }}>Tax (18%)</th>
+                    <th style={{ textAlign: 'right' }}>
+                      Tax ({platformSettings?.tax_config?.defaultTaxPercentage ?? 18}%)
+                    </th>
                     <th style={{ textAlign: 'right' }}>Total Amount</th>
                     <th>Status</th>
                     <th style={{ textAlign: 'right' }}>Action</th>

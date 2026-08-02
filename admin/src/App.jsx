@@ -16,6 +16,7 @@ import MasterTenantDetail from './components/master/MasterTenantDetail';
 import MasterBilling from './components/master/MasterBilling';
 import MasterAdmins from './components/master/MasterAdmins';
 import MasterPlans from './components/master/MasterPlans';
+import MasterSettings from './components/master/MasterSettings';
 
 /**
  * Master Admin Application Shell.
@@ -45,7 +46,9 @@ function App() {
                   <Route path="/tenants/:id" element={<MasterTenantDetail />} />
                   <Route path="/billing" element={<MasterBilling />} />
                   <Route path="/admins" element={<MasterAdmins />} />
+                  <Route path="/settings" element={<MasterSettings />} />
                 </Route>
+
 
                 {/* ── Catch-all redirect ──────────────────────────── */}
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />

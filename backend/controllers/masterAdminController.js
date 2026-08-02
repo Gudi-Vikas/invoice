@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { runWithoutRLS } from '../config/db.js';
 import razorpayService from '../services/razorpayService.js';
 import eventBus from '../services/eventBus.js';
+import { sanitizeHtmlContent } from '../utils/sanitize.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -37,7 +38,8 @@ const ALLOWED_FEATURE_KEYS = [
  * Allowed master admin permission keys.
  * These correspond to sidebar sections in the platform admin panel.
  */
-const ALLOWED_PERMISSIONS = ['dashboard', 'plans', 'tenants', 'billing', 'admins'];
+const ALLOWED_PERMISSIONS = ['dashboard', 'plans', 'tenants', 'billing', 'admins', 'settings'];
+
 
 /**
  * Master Admin Controller — Platform Owner Control Plane.
@@ -1149,8 +1151,126 @@ export const masterAdminController = {
     } catch (err) {
       next(err);
     }
+  },
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // PLATFORM SETTINGS — Get, Update & Logo Upload
+  // ───────────────────────────────────────────────────────────────────────────
+  getPlatformSettings: async (req, res, next) => {
+    try {
+      const settings = await runWithoutRLS(async (client) => {
+        const result = await client.query(
+          `SELECT business_info, invoice_config, tax_config FROM platform_settings WHERE id = 1`
+        );
+        return result.rows[0];
+      });
+
+      if (!settings) {
+        return res.status(404).json({ error: 'Platform settings not initialized.' });
+      }
+
+      return res.json(settings);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  updatePlatformSettings: async (req, res, next) => {
+    const { category } = req.params;
+    const updatePayload = req.body;
+
+    try {
+      const updatedValue = await runWithoutRLS(async (client) => {
+        const settingsRes = await client.query(
+          `SELECT business_info, invoice_config, tax_config FROM platform_settings WHERE id = 1 FOR UPDATE`
+        );
+
+        if (settingsRes.rows.length === 0) {
+          throw new Error('Platform settings not initialized.');
+        }
+
+        const current = settingsRes.rows[0];
+        let targetColumn = '';
+        let targetValue = null;
+
+        switch (category) {
+          case 'business':
+            targetColumn = 'business_info';
+            if (updatePayload.extraInfo) {
+              updatePayload.extraInfo = sanitizeHtmlContent(updatePayload.extraInfo);
+            }
+            targetValue = { ...current.business_info, ...updatePayload };
+            break;
+          case 'invoice':
+            targetColumn = 'invoice_config';
+            targetValue = { ...current.invoice_config, ...updatePayload };
+            break;
+          case 'tax':
+            targetColumn = 'tax_config';
+            targetValue = { ...current.tax_config, ...updatePayload };
+            break;
+          default:
+            return res.status(400).json({ error: `Invalid settings category: ${category}` });
+        }
+
+        await client.query(
+          `UPDATE platform_settings SET ${targetColumn} = $1, updated_at = NOW() WHERE id = 1`,
+          [targetValue]
+        );
+
+        return targetValue;
+      });
+
+      return res.json({
+        message: `Platform ${category.charAt(0).toUpperCase() + category.slice(1)} settings updated successfully.`,
+        data: updatedValue
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  uploadPlatformLogo: async (req, res, next) => {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Logo image file is required.' });
+    }
+
+    const logoUrl = `${req.protocol}://${req.get('host')}/uploads/logos/${req.file.filename}`;
+
+    try {
+      const updatedValue = await runWithoutRLS(async (client) => {
+        const settingsRes = await client.query(
+          `SELECT business_info FROM platform_settings WHERE id = 1 FOR UPDATE`
+        );
+
+        if (settingsRes.rows.length === 0) {
+          throw new Error('Platform settings not initialized.');
+        }
+
+        const targetValue = {
+          ...settingsRes.rows[0].business_info,
+          logoUrl
+        };
+
+        await client.query(
+          `UPDATE platform_settings SET business_info = $1, updated_at = NOW() WHERE id = 1`,
+          [targetValue]
+        );
+
+        return targetValue;
+      });
+
+      return res.status(201).json({
+        message: 'Platform logo uploaded successfully.',
+        logoUrl,
+        data: updatedValue
+      });
+    } catch (err) {
+      next(err);
+    }
   }
 };
 
 export default masterAdminController;
+
 

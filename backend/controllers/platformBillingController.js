@@ -124,10 +124,10 @@ export const platformBillingController = {
       billingPeriodEnd,
       planId,
       amountOverride,
-      taxPercentage = 18.00,
       dueDate,
       notes
     } = req.body;
+    let taxPercentage = req.body.taxPercentage;
 
     if (!tenantId || !billingPeriodStart || !billingPeriodEnd || !dueDate) {
       return res.status(400).json({
@@ -137,6 +137,11 @@ export const platformBillingController = {
 
     try {
       const invoice = await runWithoutRLS(async (client) => {
+        if (taxPercentage === undefined || taxPercentage === null) {
+          const ps = await client.query('SELECT tax_config FROM platform_settings WHERE id = 1');
+          taxPercentage = ps.rows[0]?.tax_config?.defaultTaxPercentage ?? 18.00;
+        }
+
         // A. Verify tenant exists
         const tenantRes = await client.query(
           'SELECT id, name, status FROM tenants WHERE id = $1',

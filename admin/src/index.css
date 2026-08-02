@@ -843,7 +843,7 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   #print-area.invoice-container {
-    border: 5px solid #234a75 !important;
+    border: 5px solid var(--theme-color, #234a75) !important;
     padding: 2.5rem !important;
     border-radius: 4px !important;
   }
@@ -863,7 +863,7 @@ h1, h2, h3, h4, h5, h6 {
 
   /* Preserve corporate invoice styles on print */
   #print-area table.invoice-table th {
-    background-color: #234a75 !important;
+    background-color: var(--theme-color, #234a75) !important;
     color: #ffffff !important;
   }
 
@@ -874,7 +874,7 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   #print-area .invoice-address-header {
-    background-color: #234a75 !important;
+    background-color: var(--theme-color, #234a75) !important;
     color: #ffffff !important;
   }
 
@@ -1002,7 +1002,7 @@ h1, h2, h3, h4, h5, h6 {
   background-color: #ffffff !important;
   color: #1e293b !important;
   padding: 3rem !important;
-  border: 5px solid #234a75 !important;
+  border: 5px solid var(--theme-color, #234a75);
   border-radius: 4px !important;
   max-width: 850px !important;
   margin: 0 auto !important;
@@ -1038,14 +1038,14 @@ h1, h2, h3, h4, h5, h6 {
 .invoice-logo-fallback {
   font-size: 1.5rem !important;
   font-weight: 800 !important;
-  color: #234a75 !important;
+  color: var(--theme-color, #234a75);
   text-transform: uppercase !important;
   margin-bottom: 0.5rem !important;
 }
 
 .invoice-title-banner {
-  background-color: #234a75 !important;
-  color: #ffffff !important;
+  background-color: var(--theme-color, #234a75);
+  color: var(--theme-contrast, #ffffff) !important;
   padding: 0.5rem 2rem !important;
   font-weight: 800 !important;
   font-size: 1.25rem !important;
@@ -1079,14 +1079,14 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Address Block */
 .invoice-address-block {
-  border: 1px solid #234a75 !important;
+  border: 1px solid var(--theme-color, #234a75);
   border-radius: 4px !important;
   overflow: hidden !important;
 }
 
 .invoice-address-header {
-  background-color: #234a75 !important;
-  color: #ffffff !important;
+  background-color: var(--theme-color, #234a75);
+  color: var(--theme-contrast, #ffffff) !important;
   padding: 0.4rem 0.8rem !important;
   font-size: 0.85rem !important;
   font-weight: 700 !important;
@@ -1094,8 +1094,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .invoice-address-body {
-  background-color: #355a82 !important;
-  color: #ffffff !important;
+  background-color: var(--theme-color, #234a75);
+  filter: brightness(0.92);
+  color: var(--theme-contrast, #ffffff) !important;
   padding: 0.75rem 0.8rem !important;
   font-size: 0.85rem !important;
   line-height: 1.4 !important;
@@ -1125,8 +1126,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .invoice-total-due-banner {
-  background-color: #234a75 !important;
-  color: #ffffff !important;
+  background-color: var(--theme-color, #234a75);
+  color: var(--theme-contrast, #ffffff) !important;
   width: 100% !important;
   padding: 0.6rem 1rem !important;
   font-weight: 800 !important;
@@ -1157,7 +1158,7 @@ h1, h2, h3, h4, h5, h6 {
 .invoice-payment-methods h4 {
   font-size: 0.85rem !important;
   font-weight: 700 !important;
-  color: #234a75 !important;
+  color: var(--theme-color, #234a75);
   margin: 0 0 0.4rem 0 !important;
   text-transform: uppercase !important;
 }
@@ -1179,8 +1180,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .invoice-table th {
-  background-color: #234a75 !important;
-  color: #ffffff !important;
+  background-color: var(--theme-color, #234a75);
+  color: var(--theme-contrast, #ffffff) !important;
   padding: 0.75rem 1rem !important;
   font-size: 0.85rem !important;
   font-weight: 700 !important;
@@ -1198,7 +1199,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .invoice-table tr:last-child td {
-  border-bottom: 2px solid #234a75 !important;
+  border-bottom: 2px solid var(--theme-color, #234a75);
 }
 
 .invoice-item-desc {
@@ -1235,7 +1236,7 @@ h1, h2, h3, h4, h5, h6 {
 .invoice-bank-details-box h4 {
   font-size: 0.85rem !important;
   font-weight: 800 !important;
-  color: #234a75 !important;
+  color: var(--theme-color, #234a75);
   margin: 0 0 0.75rem 0 !important;
   text-transform: uppercase !important;
   letter-spacing: 0.02em !important;
@@ -1286,7 +1287,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .invoice-totals-due-banner {
-  background-color: #234a75 !important;
+  background-color: var(--theme-color, #234a75);
   color: #ffffff !important;
   padding: 0.6rem 1rem !important;
   font-weight: 800 !important;
@@ -1299,7 +1300,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Footer style */
 .invoice-footer-line {
-  border-top: 1.5px solid #234a75 !important;
+  border-top: 1.5px solid var(--theme-color, #234a75);
   margin-top: 3rem !important;
   padding-top: 1.25rem !important;
   text-align: center !important;
@@ -1307,6 +1308,7 @@ h1, h2, h3, h4, h5, h6 {
   color: #475569 !important;
   font-weight: 500 !important;
 }
+
 
 
 /* ── Floating Notification Button ────────────────────────────── */
@@ -1363,4 +1365,220 @@ h1, h2, h3, h4, h5, h6 {
     width: 40px;
     height: 40px;
   }
+}
+
+/* =========================================================
+   INVOICE THEMES
+   ========================================================= */
+
+/* Default Theme is handled by the base CSS above. */
+
+/* --- Simple Theme --- */
+.theme-simple {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+}
+
+.theme-simple .invoice-title-banner,
+.theme-simple .invoice-address-header,
+.theme-simple .invoice-address-body,
+.theme-simple .invoice-total-due-banner,
+.theme-simple .invoice-table th,
+.theme-simple .invoice-footer-line {
+  background-color: transparent !important;
+  color: #1e293b !important;
+  border-radius: 0 !important;
+}
+
+.theme-simple .invoice-logo-fallback {
+  color: #1e293b !important;
+}
+
+.theme-simple .invoice-title-banner {
+  color: var(--theme-color, #234a75) !important;
+  font-size: 2rem !important;
+  text-align: right !important;
+  padding: 0 !important;
+}
+
+.theme-simple .invoice-address-block {
+  border: none !important;
+  border-left: 3px solid var(--theme-color, #234a75) !important;
+  border-radius: 0 !important;
+}
+
+.theme-simple .invoice-address-header {
+  padding: 0 0.8rem 0.2rem 0.8rem !important;
+  color: #475569 !important;
+}
+
+.theme-simple .invoice-address-body {
+  padding: 0 0.8rem !important;
+}
+
+.theme-simple .invoice-table th {
+  border-bottom: 2px solid #1e293b !important;
+  color: #1e293b !important;
+}
+
+.theme-simple .invoice-total-due-banner {
+  border-top: 2px solid #1e293b !important;
+  border-bottom: 2px solid #1e293b !important;
+  padding: 1rem 0 !important;
+  margin-top: 1rem !important;
+}
+
+/* --- Modern Theme --- */
+.theme-modern {
+  font-family: 'Outfit', sans-serif !important;
+}
+
+.theme-modern .invoice-logo-fallback {
+  color: #1e293b !important;
+}
+
+.theme-modern .invoice-title-banner {
+  background-color: transparent !important;
+  color: var(--theme-color, #234a75) !important;
+  font-size: 2.5rem !important;
+  text-align: right !important;
+  padding: 0 !important;
+  letter-spacing: -0.02em !important;
+}
+
+.theme-modern .invoice-address-block {
+  border: none !important;
+  background-color: #f8fafc !important;
+  border-radius: 12px !important;
+  padding: 1rem !important;
+}
+
+.theme-modern .invoice-address-header {
+  background-color: transparent !important;
+  color: var(--theme-color, #234a75) !important;
+  padding: 0 0 0.5rem 0 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.theme-modern .invoice-address-body {
+  background-color: transparent !important;
+  color: #1e293b !important;
+  padding: 0 !important;
+}
+
+.theme-modern .invoice-table {
+  border-collapse: separate !important;
+  border-spacing: 0 0.5rem !important;
+}
+
+.theme-modern .invoice-table th {
+  background-color: transparent !important;
+  color: #475569 !important;
+  border: none !important;
+}
+
+.theme-modern .invoice-table td {
+  background-color: #f8fafc !important;
+  border: none !important;
+}
+
+.theme-modern .invoice-table td:first-child {
+  border-radius: 8px 0 0 8px !important;
+}
+
+.theme-modern .invoice-table td:last-child {
+  border-radius: 0 8px 8px 0 !important;
+}
+
+/* --- Bold Theme --- */
+.theme-bold {
+  font-family: 'Roboto', sans-serif !important;
+  border: 8px solid var(--theme-color, #234a75) !important;
+  padding: 3rem !important;
+}
+
+.theme-bold .invoice-header {
+  border-bottom: 4px solid var(--theme-color, #234a75) !important;
+  padding-bottom: 1rem !important;
+}
+
+.theme-bold .invoice-title-banner {
+  background-color: var(--theme-color, #234a75) !important;
+  color: var(--theme-contrast, #ffffff) !important;
+  font-size: 2rem !important;
+  padding: 1rem 2rem !important;
+}
+
+.theme-bold .invoice-address-block {
+  border: 2px solid var(--theme-color, #234a75) !important;
+}
+
+.theme-bold .invoice-table th {
+  background-color: var(--theme-color, #234a75) !important;
+  color: var(--theme-contrast, #ffffff) !important;
+  font-weight: 900 !important;
+}
+
+.theme-bold .invoice-total-due-banner {
+  background-color: var(--theme-color, #234a75) !important;
+  color: var(--theme-contrast, #ffffff) !important;
+  padding: 1.5rem !important;
+  font-size: 1.5rem !important;
+}
+
+/* --- Elegant Theme --- */
+.theme-elegant {
+  font-family: 'Georgia', serif !important;
+  color: #333 !important;
+}
+
+.theme-elegant .invoice-title-banner {
+  background-color: transparent !important;
+  color: var(--theme-color, #234a75) !important;
+  font-size: 2.5rem !important;
+  text-align: center !important;
+  padding: 0 !important;
+  letter-spacing: 0.1em !important;
+  border-bottom: 1px solid var(--theme-color, #234a75) !important;
+  border-top: 1px solid var(--theme-color, #234a75) !important;
+  padding: 1rem 0 !important;
+}
+
+.theme-elegant .invoice-address-block {
+  border: none !important;
+}
+
+.theme-elegant .invoice-address-header {
+  background-color: transparent !important;
+  color: var(--theme-color, #234a75) !important;
+  padding: 0 !important;
+  border-bottom: 1px dashed #ccc !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.theme-elegant .invoice-address-body {
+  background-color: transparent !important;
+  color: #555 !important;
+  padding: 0 !important;
+}
+
+.theme-elegant .invoice-table th {
+  background-color: transparent !important;
+  color: var(--theme-color, #234a75) !important;
+  border-top: 2px solid var(--theme-color, #234a75) !important;
+  border-bottom: 2px solid var(--theme-color, #234a75) !important;
+}
+
+.theme-elegant .invoice-total-due-banner {
+  background-color: transparent !important;
+  color: var(--theme-color, #234a75) !important;
+  border-top: 2px solid var(--theme-color, #234a75) !important;
+  border-bottom: 2px double var(--theme-color, #234a75) !important;
+  padding: 1rem 0 !important;
+}
+
+.theme-elegant .invoice-footer-line {
+  background-color: transparent !important;
+  color: var(--text-secondary) !important;
+  border-top: 1px dashed #ccc !important;
 }

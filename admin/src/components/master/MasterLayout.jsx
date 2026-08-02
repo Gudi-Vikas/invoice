@@ -6,7 +6,7 @@ import ThemeToggle from '../ThemeToggle';
 import NotificationPanel from '../NotificationPanel';
 import {
   LayoutDashboard, Building2, Receipt, ShieldCheck, LogOut,
-  Layers, CreditCard, ChevronLeft, ChevronRight, Bell
+  Layers, CreditCard, ChevronLeft, ChevronRight, Bell, Settings
 } from 'lucide-react';
 
 /**
@@ -55,8 +55,10 @@ export const MasterLayout = () => {
     { path: '/plans',     name: 'Plans',     icon: CreditCard,      perm: 'plans' },
     { path: '/tenants',   name: 'Tenants',   icon: Building2,       perm: 'tenants' },
     { path: '/billing',   name: 'Billing',   icon: Receipt,         perm: 'billing' },
-    { path: '/admins',    name: 'Admins',    icon: ShieldCheck,     perm: 'admins' }
+    { path: '/admins',    name: 'Admins',    icon: ShieldCheck,     perm: 'admins' },
+    { path: '/settings',  name: 'Settings',  icon: Settings,        perm: 'settings' }
   ];
+
 
   const menuItems = masterPermissions === null || masterPermissions === undefined
     ? allMenuItems

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { ArrowLeft, Printer, Loader, CreditCard, Download } from 'lucide-react';
 import { downloadElementAsPdf } from '../../utils/pdfUtils';
+import { sanitizeHtmlContent } from '../../utils/sanitize';
+import { getContrastColor } from '../../utils/colorUtils';
 
 export const PlatformInvoiceVisualizer = ({ 
   invoice, 
@@ -8,7 +10,11 @@ export const PlatformInvoiceVisualizer = ({
   onClose, 
   onPay, 
   isPaying, 
-  showPayButton = false 
+  showPayButton = false,
+  businessInfo,
+  invoiceConfig,
+  taxConfig,
+  hideTopBar = false
 }) => {
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
@@ -26,64 +32,89 @@ export const PlatformInvoiceVisualizer = ({
     }
   };
 
+  const themeColor = invoiceConfig?.templateColor || '#7c3aed';
+  const themeDesign = invoiceConfig?.templateDesign || 'default';
+  const contrastColor = getContrastColor(themeColor);
+  const currencySymbol = taxConfig?.currencySymbol || '₹';
+
+  const bName = businessInfo?.businessName || 'Ultrakey IT Solutions Private Limited';
+  const bAddress = businessInfo?.address || 'Flat No. 204, 2nd Floor, Cyber Residency,\nIndira Nagar, Gachibowli,\nHyderabad, Telangana, India-500032';
+  const bEmail = businessInfo?.email || 'support@ultrakeyit.com';
+  const bPhone = businessInfo?.phone;
+  const bExtraInfo = businessInfo?.extraInfo || '<b>GST No:</b> 36AADCU5062A1ZO';
+  const logoUrl = businessInfo?.logoUrl;
+
   return (
     <div>
       {/* Top Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <button className="btn btn-secondary" onClick={onClose}>
-          <ArrowLeft size={16} /> Back
-        </button>
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <span style={{ fontSize: '1.1rem', fontWeight: 700, textTransform: 'uppercase' }}>
-            Platform Invoice
-          </span>
-          <button
-            className="btn btn-primary"
-            onClick={handleDownloadPdf}
-            disabled={isDownloadingPdf}
-            style={{ gap: '0.5rem' }}
-          >
-            {isDownloadingPdf ? (
-              <><Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> Generating PDF...</>
-            ) : (
-              <><Download size={15} /> Download PDF</>
-            )}
+      {!hideTopBar && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+          <button className="btn btn-secondary" onClick={onClose}>
+            <ArrowLeft size={16} /> Back
           </button>
-          <button
-            className="btn btn-secondary"
-            onClick={() => window.print()}
-            style={{ gap: '0.5rem' }}
-          >
-            <Printer size={15} /> Print
-          </button>
-          
-          {showPayButton && (invoice.status === 'pending' || invoice.status === 'overdue') && (
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <span style={{ fontSize: '1.1rem', fontWeight: 700, textTransform: 'uppercase' }}>
+              Platform Invoice
+            </span>
             <button
               className="btn btn-primary"
-              onClick={onPay}
-              disabled={isPaying}
+              onClick={handleDownloadPdf}
+              disabled={isDownloadingPdf}
               style={{ gap: '0.5rem' }}
             >
-              {isPaying ? (
-                <><Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> Processing...</>
+              {isDownloadingPdf ? (
+                <><Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> Generating PDF...</>
               ) : (
-                <><CreditCard size={15} /> Pay Online via Razorpay</>
+                <><Download size={15} /> Download PDF</>
               )}
             </button>
-          )}
+            <button
+              className="btn btn-secondary"
+              onClick={() => window.print()}
+              style={{ gap: '0.5rem' }}
+            >
+              <Printer size={15} /> Print
+            </button>
+            
+            {showPayButton && (
+              <button 
+                className="btn btn-primary"
+                onClick={onPay}
+                disabled={isPaying || invoice.status === 'paid'}
+                style={{ background: invoice.status === 'paid' ? 'var(--accent-success)' : '', gap: '0.5rem' }}
+              >
+                {isPaying ? (
+                  <><Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> Processing...</>
+                ) : invoice.status === 'paid' ? (
+                  'Already Paid'
+                ) : (
+                  <><CreditCard size={15} /> Pay Online via Razorpay</>
+                )}
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Print-Only PDF Container */}
-      <div id="print-area" className="invoice-container">
+      <div id="print-area" className={`invoice-container theme-${themeDesign}`} style={{ '--doc-accent': themeColor, '--doc-contrast': contrastColor, '--theme-color': themeColor, '--theme-contrast': contrastColor, borderColor: themeColor }}>
         {/* Header */}
         <div className="invoice-header">
           <div className="invoice-logo-container">
-            <h2 className="invoice-logo-fallback" style={{ color: '#fff', fontSize: '1.75rem', fontWeight: '800' }}>
-              Ultrakey
-            </h2>
+            {logoUrl ? (
+              <img 
+                src={logoUrl} 
+                alt={bName} 
+                style={{ maxHeight: '60px', maxWidth: '220px', objectFit: 'contain' }}
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            ) : (
+              <h2 className="invoice-logo-fallback" style={{ color: themeColor, fontSize: '1.75rem', fontWeight: '800' }}>
+                {bName.split(' ')[0] || 'Ultrakey'}
+              </h2>
+            )}
           </div>
-          <div className="invoice-title-banner" style={{ background: '#7c3aed', color: '#fff' }}>
+          <div className="invoice-title-banner">
             Subscription Tax Invoice
           </div>
         </div>
@@ -95,19 +126,25 @@ export const PlatformInvoiceVisualizer = ({
             <div className="invoice-address-block">
               <div className="invoice-address-header">Billed By:</div>
               <div className="invoice-address-body">
-                <p><b>Ultrakey IT Solutions Private Limited</b></p>
-                <p>Flat No. 204, 2nd Floor, Cyber Residency,</p>
-                <p>Indira Nagar, Gachibowli,</p>
-                <p>Hyderabad, Telangana, India-500032</p>
-                <p>support@ultrakeyit.com</p>
-                <p><b>GST No:</b> 36AADCU5062A1ZO</p>
+                <p><b>{bName}</b></p>
+                {bAddress.split('\n').map((line, idx) => (
+                  <p key={idx}>{line}</p>
+                ))}
+                {bEmail && <p>{bEmail}</p>}
+                {bPhone && <p>{bPhone}</p>}
+                {bExtraInfo && (
+                  <div 
+                    style={{ marginTop: '0.35rem' }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtmlContent(bExtraInfo) }} 
+                  />
+                )}
               </div>
             </div>
 
             <div className="invoice-address-block">
               <div className="invoice-address-header">Billed To:</div>
               <div className="invoice-address-body">
-                <p><b>{tenantName}</b></p>
+                <p><b>{tenantName || 'Tenant Organization'}</b></p>
                 <p>Platform Tenant</p>
               </div>
             </div>
@@ -126,9 +163,9 @@ export const PlatformInvoiceVisualizer = ({
               <span>{new Date(invoice.due_date).toLocaleDateString()}</span>
             </div>
 
-            <div className="invoice-total-due-banner" style={{ borderLeft: '4px solid #7c3aed' }}>
+            <div className="invoice-total-due-banner">
               <span>TOTAL DUE</span>
-              <span>₹{parseFloat(invoice.total_amount).toFixed(2)}</span>
+              <span>{currencySymbol}{parseFloat(invoice.total_amount).toFixed(2)}</span>
             </div>
 
             <div className="invoice-payment-terms">
@@ -137,7 +174,7 @@ export const PlatformInvoiceVisualizer = ({
                   PAID on {invoice.paid_at ? new Date(invoice.paid_at).toLocaleDateString() : 'N/A'}
                 </span>
               ) : (
-                'Payment is due upon receipt. Late payments may result in workspace suspension.'
+                invoiceConfig?.termsAndConditions || 'Payment is due upon receipt. Late payments may result in workspace suspension.'
               )}
             </div>
           </div>
@@ -146,11 +183,11 @@ export const PlatformInvoiceVisualizer = ({
         {/* Line Items Table */}
         <table className="invoice-table">
           <thead>
-            <tr style={{ background: '#7c3aed', color: '#fff' }}>
-              <th style={{ textAlign: 'left', color: '#fff' }}>QTY</th>
-              <th style={{ textAlign: 'left', color: '#fff' }}>DESCRIPTION</th>
-              <th style={{ textAlign: 'right', color: '#fff' }}>RATE</th>
-              <th style={{ textAlign: 'right', color: '#fff' }}>AMOUNT</th>
+            <tr>
+              <th style={{ textAlign: 'left' }}>QTY</th>
+              <th style={{ textAlign: 'left' }}>DESCRIPTION</th>
+              <th style={{ textAlign: 'right' }}>RATE</th>
+              <th style={{ textAlign: 'right' }}>AMOUNT</th>
             </tr>
           </thead>
           <tbody>
@@ -165,10 +202,10 @@ export const PlatformInvoiceVisualizer = ({
                 </span>
               </td>
               <td style={{ textAlign: 'right', verticalAlign: 'top' }}>
-                ₹{parseFloat(invoice.amount).toFixed(2)}
+                {currencySymbol}{parseFloat(invoice.amount).toFixed(2)}
               </td>
               <td style={{ textAlign: 'right', verticalAlign: 'top', fontWeight: 600 }}>
-                ₹{parseFloat(invoice.amount).toFixed(2)}
+                {currencySymbol}{parseFloat(invoice.amount).toFixed(2)}
               </td>
             </tr>
           </tbody>
@@ -178,9 +215,11 @@ export const PlatformInvoiceVisualizer = ({
         <div className="invoice-bottom-section">
           {/* Notes */}
           <div className="invoice-bank-details-box">
-            <h4>Notes</h4>
-            {invoice.notes ? (
-              <p style={{ color: '#334155', margin: 0, whiteSpace: 'pre-wrap' }}>{invoice.notes}</p>
+            <h4 style={{ color: themeColor }}>Notes</h4>
+            {invoice.notes || invoiceConfig?.footerNotes ? (
+              <p style={{ color: '#334155', margin: 0, whiteSpace: 'pre-wrap' }}>
+                {invoice.notes || invoiceConfig?.footerNotes}
+              </p>
             ) : (
               <p style={{ color: '#334155', margin: 0, fontStyle: 'italic' }}>Thank you for your business!</p>
             )}
@@ -190,15 +229,15 @@ export const PlatformInvoiceVisualizer = ({
           <div className="invoice-totals-box">
             <div className="invoice-totals-row">
               <span>Subtotal</span>
-              <span>₹{parseFloat(invoice.amount).toFixed(2)}</span>
+              <span>{currencySymbol}{parseFloat(invoice.amount).toFixed(2)}</span>
             </div>
             <div className="invoice-totals-row">
               <span>Tax ({parseFloat(invoice.tax_percentage)}%)</span>
-              <span>₹{parseFloat(invoice.tax_amount).toFixed(2)}</span>
+              <span>{currencySymbol}{parseFloat(invoice.tax_amount).toFixed(2)}</span>
             </div>
-            <div className="invoice-totals-row grand-total" style={{ borderTop: '2px solid #7c3aed', color: '#7c3aed' }}>
+            <div className="invoice-totals-row grand-total" style={{ borderTop: `2px solid ${themeColor}`, color: themeColor }}>
               <span>Total Amount</span>
-              <span>₹{parseFloat(invoice.total_amount).toFixed(2)}</span>
+              <span>{currencySymbol}{parseFloat(invoice.total_amount).toFixed(2)}</span>
             </div>
           </div>
         </div>

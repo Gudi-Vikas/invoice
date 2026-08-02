@@ -929,7 +929,7 @@ h6 {
   /* Preserve corporate invoice styles on print */
   #print-area table.invoice-table th {
     background-color: var(--doc-accent, #234a75) !important;
-    color: #ffffff !important;
+    color: var(--doc-contrast, #ffffff) !important;
   }
 
   #print-area table.invoice-table td {
@@ -940,12 +940,13 @@ h6 {
 
   #print-area .invoice-address-header {
     background-color: var(--doc-accent, #234a75) !important;
-    color: #ffffff !important;
+    color: var(--doc-contrast, #ffffff) !important;
   }
 
   #print-area .invoice-address-body {
-    background-color: #355a82 !important;
-    color: #ffffff !important;
+    background-color: var(--doc-accent, #234a75) !important;
+    filter: brightness(0.92);
+    color: var(--doc-contrast, #ffffff) !important;
   }
 
   /* Remove glassmorphism styling on print cards */
@@ -1135,7 +1136,7 @@ h6 {
 
 .invoice-title-banner {
   background-color: var(--doc-accent, #234a75) !important;
-  color: #ffffff !important;
+  color: var(--doc-contrast, #ffffff) !important;
   padding: 0.5rem 2rem !important;
   font-weight: 800 !important;
   font-size: 1.25rem !important;
@@ -1176,7 +1177,7 @@ h6 {
 
 .invoice-address-header {
   background-color: var(--doc-accent, #234a75) !important;
-  color: #ffffff !important;
+  color: var(--doc-contrast, #ffffff) !important;
   padding: 0.4rem 0.8rem !important;
   font-size: 0.85rem !important;
   font-weight: 700 !important;
@@ -1184,8 +1185,9 @@ h6 {
 }
 
 .invoice-address-body {
-  background-color: #355a82 !important;
-  color: #ffffff !important;
+  background-color: var(--doc-accent, #234a75) !important;
+  filter: brightness(0.92);
+  color: var(--doc-contrast, #ffffff) !important;
   padding: 0.75rem 0.8rem !important;
   font-size: 0.85rem !important;
   line-height: 1.4 !important;
@@ -1216,7 +1218,7 @@ h6 {
 
 .invoice-total-due-banner {
   background-color: var(--doc-accent, #234a75) !important;
-  color: #ffffff !important;
+  color: var(--doc-contrast, #ffffff) !important;
   width: 100% !important;
   padding: 0.6rem 1rem !important;
   font-weight: 800 !important;
@@ -1270,7 +1272,7 @@ h6 {
 
 .invoice-table th {
   background-color: var(--doc-accent, #234a75) !important;
-  color: #ffffff !important;
+  color: var(--doc-contrast, #ffffff) !important;
   padding: 0.75rem 1rem !important;
   font-size: 0.85rem !important;
   font-weight: 700 !important;
@@ -1380,7 +1382,7 @@ h6 {
 
 .invoice-totals-due-banner {
   background-color: var(--doc-accent, #234a75) !important;
-  color: #ffffff !important;
+  color: var(--doc-contrast, #ffffff) !important;
   padding: 0.6rem 1rem !important;
   font-weight: 800 !important;
   font-size: 1.15rem !important;
@@ -1596,7 +1598,7 @@ h6 {
 
 .theme-bold .invoice-title-banner {
   background-color: var(--doc-accent, #234a75) !important;
-  color: #fff !important;
+  color: var(--doc-contrast, #ffffff) !important;
   font-size: 2rem !important;
   padding: 1rem 2rem !important;
 }
@@ -1607,13 +1609,13 @@ h6 {
 
 .theme-bold .invoice-table th {
   background-color: var(--doc-accent, #234a75) !important;
-  color: #fff !important;
+  color: var(--doc-contrast, #ffffff) !important;
   font-weight: 900 !important;
 }
 
 .theme-bold .invoice-total-due-banner {
   background-color: var(--doc-accent, #234a75) !important;
-  color: #fff !important;
+  color: var(--doc-contrast, #ffffff) !important;
   padding: 1.5rem !important;
   font-size: 1.5rem !important;
 }

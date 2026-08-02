@@ -272,7 +272,7 @@ export const subscriptionController = {
 
   getTenantInvoices: async (req, res, next) => {
     try {
-      const invoices = await runInTransaction(req.tenantId, async (client) => {
+      const result = await runInTransaction(req.tenantId, async (client) => {
         const queryRes = await client.query(
           `SELECT bi.*, p.name AS plan_name
            FROM platform_billing_invoices bi
@@ -281,9 +281,17 @@ export const subscriptionController = {
            ORDER BY bi.created_at DESC`,
           [req.tenantId]
         );
-        return queryRes.rows;
+        
+        const settingsRes = await client.query(
+          `SELECT business_info, invoice_config, tax_config FROM platform_settings WHERE id = 1`
+        );
+
+        return {
+          invoices: queryRes.rows,
+          platformSettings: settingsRes.rows[0] || {}
+        };
       });
-      return res.json(invoices);
+      return res.json(result);
     } catch (err) {
       next(err);
     }

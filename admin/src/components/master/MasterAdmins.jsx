@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import {
   ShieldCheck, ToggleLeft, ToggleRight, UserPlus, X,
-  LayoutDashboard, CreditCard, Building2, Receipt, Eye, EyeOff, Settings2
+  LayoutDashboard, CreditCard, Building2, Receipt, Eye, EyeOff, Settings2, Settings
 } from 'lucide-react';
 import ModalPortal from '../ModalPortal';
 
@@ -18,8 +18,10 @@ const PERMISSION_SECTIONS = [
   { key: 'plans',     label: 'Plans',      icon: CreditCard,      color: 'hsl(190, 90%, 50%)' },
   { key: 'tenants',   label: 'Tenants',    icon: Building2,       color: 'hsl(142, 70%, 49%)' },
   { key: 'billing',   label: 'Billing',    icon: Receipt,         color: 'hsl(38, 92%, 55%)' },
-  { key: 'admins',    label: 'Admins',     icon: ShieldCheck,     color: 'hsl(350, 89%, 60%)' }
+  { key: 'admins',    label: 'Admins',     icon: ShieldCheck,     color: 'hsl(350, 89%, 60%)' },
+  { key: 'settings',  label: 'Settings',   icon: Settings,        color: 'hsl(262, 83%, 65%)' }
 ];
+
 
 // ── Permission Checkboxes Component ───────────────────────────────────────
 const PermissionCheckboxes = ({ selected, onToggle, fullAccess, onFullAccessToggle }) => (
