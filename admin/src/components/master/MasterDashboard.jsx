@@ -5,7 +5,7 @@ import api from '../../api';
 import { useToast } from '../../context/ToastContext';
 import {
   Building2, TrendingUp, DollarSign, Users, AlertTriangle,
-  ArrowUpRight, RefreshCw
+  ArrowUpRight
 } from 'lucide-react';
 
 /**
@@ -69,9 +69,6 @@ export const MasterDashboard = () => {
           <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '0.5rem' }}>Platform Dashboard</h1>
           <p style={{ color: 'var(--text-secondary)' }}>High-level health snapshot of the Ultrakey SaaS platform.</p>
         </div>
-        <button className="btn btn-secondary" onClick={loadStats} style={{ gap: '0.5rem' }}>
-          <RefreshCw size={14} /> Refresh
-        </button>
       </div>
 
       {/* Metric Cards */}
