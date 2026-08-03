@@ -4,7 +4,7 @@ import api from '../../api';
 import { useToast } from '../../context/ToastContext';
 import {
   CreditCard, Plus, Edit3, Archive, RotateCcw, Check,
-  X, Infinity, Users, FileText, Crown, RefreshCw, Zap
+  X, Infinity, Users, FileText, Crown, Zap
 } from 'lucide-react';
 import ModalPortal from '../ModalPortal';
 
@@ -195,10 +195,7 @@ export const MasterPlans = () => {
             Create and manage SaaS plans with usage limits. Plans auto-sync to Razorpay.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button className="btn btn-secondary" onClick={loadPlans} style={{ gap: '0.5rem' }}>
-            <RefreshCw size={14} /> Refresh
-          </button>
+        <div>
           <button className="btn btn-primary" onClick={openCreate} style={{ gap: '0.5rem' }}>
             <Plus size={16} /> Create Plan
           </button>
