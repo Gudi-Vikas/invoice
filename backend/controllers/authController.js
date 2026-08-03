@@ -176,15 +176,15 @@ export const authController = {
   signup: async (req, res, next) => {
     const { name, domain, email, password, phone } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: 'Tenant name, email, and password are required.' });
+    if (!name || !email || !password || !phone || !phone.trim() || phone.trim() === '+91') {
+      return res.status(400).json({ error: 'Tenant name, email, password, and contact phone number are required.' });
     }
 
     if (!isValidEmail(email)) {
       return res.status(400).json({ error: 'Please enter a valid email address.' });
     }
 
-    if (phone && !isValidPhone(phone)) {
+    if (!isValidPhone(phone)) {
       return res.status(400).json({ error: 'Please enter a valid contact phone number.' });
     }
 

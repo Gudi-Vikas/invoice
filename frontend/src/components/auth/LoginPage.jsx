@@ -50,7 +50,12 @@ export const LoginPage = () => {
           setSubmitting(false);
           return;
         }
-        if (formData.phone && !isValidPhone(formData.phone)) {
+        if (!formData.phone || !formData.phone.trim() || formData.phone.trim() === '+91') {
+          setError('Contact phone number is required.');
+          setSubmitting(false);
+          return;
+        }
+        if (!isValidPhone(formData.phone)) {
           setError('Please enter a valid contact phone number (e.g. +91 9876543210).');
           setSubmitting(false);
           return;
@@ -184,7 +189,7 @@ export const LoginPage = () => {
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Contact Phone Number (optional)</label>
+                <label className="form-label">Contact Phone Number *</label>
                 <input
                   type="tel"
                   name="phone"
@@ -192,6 +197,7 @@ export const LoginPage = () => {
                   placeholder="+91 9876543210"
                   value={formData.phone}
                   onChange={handleChange}
+                  required
                   autoComplete="tel"
                 />
               </div>
